@@ -62,6 +62,7 @@ canvas { display: block; width: 100% !important; height: 100% !important; }
   <div id="bottom-ui">
     <div id="modes">
       <button class="mode-btn selected" data-mode="build">🏗️ Stavanie</button>
+      <button class="mode-btn" data-mode="road">🛣️ Cesta</button>
       <button class="mode-btn" data-mode="sculpt-up">⬆️ Zvýšiť</button>
       <button class="mode-btn" data-mode="sculpt-down">⬇️ Znížiť</button>
       <button class="mode-btn" data-mode="mine">⛏️ Ťažiť</button>
@@ -81,6 +82,7 @@ let buildings = [];
 let trees = [];
 let settlers = [];
 let riverTiles = new Set();
+let roadTiles = new Set();
 const buildingTypes = {
   hut: { name: "Chata", cost: { wood: 6, stone: 3 }, prod: { food: 1 }, height: 1.2, color: 0x8d6e63 },
   farm: { name: "Farma", cost: { wood: 8, stone: 4 }, prod: { food: 3 }, height: 1.0, color: 0x66bb6a },
@@ -114,6 +116,8 @@ const buildingGroup = new THREE.Group();
 scene.add(buildingGroup);
 const natureGroup = new THREE.Group();
 scene.add(natureGroup);
+const roadGroup = new THREE.Group();
+scene.add(roadGroup);
 const settlerGroup = new THREE.Group();
 scene.add(settlerGroup);
 function generateTerrain() {
@@ -145,13 +149,24 @@ function createTerrain() {
     }
   }
 }
+function createRoads() {
+  while (roadGroup.children.length) roadGroup.remove(roadGroup.children[0]);
+  const geo = new THREE.BoxGeometry(TILE * 0.7, 0.08, TILE * 0.7);
+  const matRoad = new THREE.MeshLambertMaterial({ color: 0x6d4c41 });
+  roadTiles.forEach(key => {
+    const [x, y] = key.split(',').map(Number);
+    const mesh = new THREE.Mesh(geo, matRoad);
+    mesh.position.set(x*TILE, 0.12, y*TILE);
+    roadGroup.add(mesh);
+  });
+}
 function addNature() {
   while (natureGroup.children.length) natureGroup.remove(natureGroup.children[0]);
   trees = [];
   for (let y = 0; y < GRID; y++) {
     for (let x = 0; x < GRID; x++) {
-      if (riverTiles.has(x + ',' + y)) continue;
-      if (Math.random() > 0.6) {
+      if (riverTiles.has(x + ',' + y) || roadTiles.has(x + ',' + y) || buildings.some(b => b.x === x && b.y === y)) continue;
+      if (Math.random() > 0.65) {
         const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 1.2, 4), new THREE.MeshLambertMaterial({ color: 0x5d4037 }));
         const leaves = new THREE.Mesh(new THREE.SphereGeometry(0.6, 5, 4), new THREE.MeshLambertMaterial({ color: 0x2e7d32 }));
         trunk.position.set(x*TILE, 0.7, y*TILE);
@@ -173,14 +188,16 @@ function spawnSettlers() {
     body.position.set(x*TILE, 0.35, y*TILE);
     head.position.set(x*TILE, 0.7, y*TILE);
     settlerGroup.add(body, head);
-    settlers.push({ x, y, mesh: { body, head } });
+    settlers.push({ x, y, mesh: { body, head }, onRoad: false });
   }
 }
 function updateSettlers() {
   settlers.forEach(s => {
-    if (Math.random() > 0.95) {
+    if (Math.random() > 0.94) {
+      const speed = s.onRoad ? 0.08 : 0.04;
       s.x = Math.max(0, Math.min(GRID-1, s.x + (Math.random()-0.5)*3));
       s.y = Math.max(0, Math.min(GRID-1, s.y + (Math.random()-0.5)*3));
+      s.onRoad = roadTiles.has(Math.round(s.x) + ',' + Math.round(s.y));
     }
     if (s.mesh) {
       s.mesh.body.position.set(s.x*TILE, 0.35, s.y*TILE);
@@ -239,14 +256,24 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     const x = Math.round(p.x / TILE);
     const y = Math.round(p.z / TILE);
     if (x >= 0 && x < GRID && y >= 0 && y < GRID) {
-      if (mode === 'sculpt-up') { terrainHeights[y][x] = Math.min(4, terrainHeights[y][x] + 1); createTerrain(); log('Zvýšené'); }
+      if (mode === 'road' && !riverTiles.has(x+','+y) && !roadTiles.has(x+','+y)) {
+        if (resources.stone >= 2) {
+          resources.stone -= 2;
+          roadTiles.add(x + ',' + y);
+          createRoads();
+          addNature();
+          log('Cesta postavená');
+          updateUI();
+        } else log('Nedostatok kameňa');
+      }
+      else if (mode === 'sculpt-up') { terrainHeights[y][x] = Math.min(4, terrainHeights[y][x] + 1); createTerrain(); log('Zvýšené'); }
       else if (mode === 'sculpt-down') { terrainHeights[y][x] = Math.max(0, terrainHeights[y][x] - 1); createTerrain(); log('Znížené'); }
       else if (mode === 'mine') {
         resources.stone += 3;
         log('Vyťažené');
         updateUI();
       }
-      else if (mode === 'build' && selectedBuilding && !buildings.some(b => b.x===x && b.y===y) && !riverTiles.has(x+','+y)) {
+      else if (mode === 'build' && selectedBuilding && !buildings.some(b => b.x===x && b.y===y) && !riverTiles.has(x+','+y) && !roadTiles.has(x+','+y)) {
         const cost = buildingTypes[selectedBuilding].cost;
         if (resources.wood >= (cost.wood||0) && resources.stone >= (cost.stone||0)) {
           resources.wood -= cost.wood||0; resources.stone -= cost.stone||0;
@@ -288,7 +315,7 @@ spawnSettlers();
 updateBuildMenu();
 updateUI();
 animate();
-log('Jednoduchá verzia pre iPhone. Otáčaj prstom.');
+log('Režim Cesta: stavaj cesty medzi budovami. Obyvatelia po nich idú rýchlejšie.');
 </script>
 </body>
 </html>
