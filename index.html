@@ -256,6 +256,12 @@ function generateTerrain() {
       terrainHeights[y][x] = Math.max(0, h);
     }
   }
+  // Normalize heights to a fixed 0..2.3 range so every seed gets grass + trees
+  // (raw noise varies too slowly across the map; ~1/3 of seeds were almost all brown with no trees)
+  let minH = Infinity, maxH = -Infinity;
+  terrainHeights.forEach(row => row.forEach(h => { minH = Math.min(minH, h); maxH = Math.max(maxH, h); }));
+  const hScale = maxH - minH > 0.01 ? 2.3 / (maxH - minH) : 1;
+  for (let y = 0; y < GRID; y++) for (let x = 0; x < GRID; x++) terrainHeights[y][x] = (terrainHeights[y][x] - minH) * hScale;
   for (let y = 2; y < GRID - 2; y++) {
     const x = Math.floor(GRID / 2) + Math.floor(Math.sin(y * 0.12 + seed) * 3);
     if (x >= 0 && x < GRID) {
@@ -714,7 +720,7 @@ function updateUI() {
     if (el) el.textContent = Math.floor(resources[k] || 0);
   });
   document.getElementById('era').textContent = 'Éra: ' + eras[era] + ' | ' + weatherTypes[weather].icon + ' ' + weatherTypes[weather].name;
-  document.getElementById('stats').textContent = 'Vyrobené: ' + Math.floor(stats.produced) + ' | Max: ' + stats.maxPop + ' | ' + Math.floor(stats.time/60) + 'm';
+  document.getElementById('stats').textContent = 'Vyrobené: ' + Math.floor(stats.produced) + ' | Max: ' + Math.floor(stats.maxPop) + ' | ' + Math.floor(stats.time/60) + 'm';
   updateQuests();
 }
 function log(msg) { document.getElementById('log').textContent = msg; }
