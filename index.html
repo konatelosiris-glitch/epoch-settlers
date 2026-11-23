@@ -46,6 +46,12 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0a0a1a; c
 #log { font-size: 11px; color: #a8dadc; margin: 2px 0; min-height: 14px; text-align: center; }
 #era { font-size: 12px; color: #ffd166; text-align: center; margin: 2px 0; font-weight: bold; }
 #stats { font-size: 10px; color: #90a4ae; text-align: center; margin: 1px 0; }
+#info-panel { 
+  position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
+  background: rgba(22,33,62,0.95); padding: 8px 12px; border-radius: 8px;
+  font-size: 12px; pointer-events: auto; display: none; z-index: 15;
+  border: 1px solid #e94560; max-width: 90%;
+}
 #canvas-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
 canvas { display: block; width: 100% !important; height: 100% !important; }
 #feedback { position: absolute; pointer-events: none; font-size: 16px; font-weight: bold; color: #ffeb3b; text-shadow: 1px 1px 2px #000; z-index: 20; }
@@ -71,6 +77,7 @@ canvas { display: block; width: 100% !important; height: 100% !important; }
     <div class="resource">🔬 <span id="res-science">0</span></div>
     <div class="resource">💰 <span id="res-gold">0</span></div>
   </div>
+  <div id="info-panel"></div>
   <div id="bottom-ui">
     <div id="era">Éra: Pravek</div>
     <div id="stats">Vyrobené: 0 | Max pop: 12 | Čas: 0m</div>
@@ -81,6 +88,7 @@ canvas { display: block; width: 100% !important; height: 100% !important; }
       <button class="mode-btn" data-mode="sculpt-down">⬇️</button>
       <button class="mode-btn" data-mode="mine">⛏️</button>
       <button class="mode-btn" data-mode="upgrade">⬆️</button>
+      <button class="mode-btn" data-mode="info">ℹ️</button>
       <button class="mode-btn" data-mode="center">🎯</button>
       <button class="trade-btn" id="btn-trade">💰</button>
       <button class="save-btn" id="btn-save1">💾1</button>
@@ -115,6 +123,22 @@ let seed = Math.random() * 10000;
 let weather = 'clear';
 let dayTime = 0;
 let animTime = 0;
+let particles = [];
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playSound(freq, dur, type = 'sine') {
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.value = 0.08;
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    osc.stop(audioCtx.currentTime + dur);
+  } catch(e) {}
+}
 function makeTexture(color, type) {
   const c = document.createElement('canvas');
   c.width = 128; c.height = 128;
@@ -190,6 +214,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(1);
 renderer.setClearColor(0x64b5f6);
+renderer.shadowMap.enabled = true;
 document.getElementById('canvas-container').appendChild(renderer.domElement);
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.target.set(GRID*TILE/2, 0, GRID*TILE/2);
@@ -197,10 +222,11 @@ controls.enableDamping = true;
 controls.maxPolarAngle = Math.PI / 2.2;
 controls.minDistance = 5;
 controls.maxDistance = 120;
-const ambient = new THREE.AmbientLight(0xffffff, 0.75);
+const ambient = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambient);
-const sun = new THREE.DirectionalLight(0xffffff, 0.55);
-sun.position.set(10, 20, 8);
+const sun = new THREE.DirectionalLight(0xffffff, 0.7);
+sun.position.set(15, 25, 10);
+sun.castShadow = true;
 scene.add(sun);
 const terrainGroup = new THREE.Group();
 scene.add(terrainGroup);
@@ -212,6 +238,8 @@ const roadGroup = new THREE.Group();
 scene.add(roadGroup);
 const settlerGroup = new THREE.Group();
 scene.add(settlerGroup);
+const particleGroup = new THREE.Group();
+scene.add(particleGroup);
 function noise(x, y) {
   const n = Math.sin(x * 0.15 + seed) * Math.cos(y * 0.12 + seed * 0.7);
   const n2 = Math.sin(x * 0.35 + seed * 1.3) * Math.cos(y * 0.28 + seed);
@@ -255,6 +283,7 @@ function createTerrain() {
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(x*TILE, height/2, y*TILE);
       mesh.scale.y = height;
+      mesh.receiveShadow = true;
       terrainGroup.add(mesh);
     }
   }
@@ -284,11 +313,13 @@ function addNature() {
         const leaves = new THREE.Mesh(new THREE.SphereGeometry(0.75*age, 6, 5), new THREE.MeshLambertMaterial({ color: 0x2e7d32 }));
         trunk.position.set(x*TILE, 0.8*age, y*TILE);
         leaves.position.set(x*TILE, 1.7*age, y*TILE);
+        trunk.castShadow = true;
         natureGroup.add(trunk, leaves);
         trees.push({ x, y, age, mesh: { trunk, leaves } });
       } else if (h > 2.5 && Math.random() > 0.86) {
         const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.3 + Math.random()*0.2, 0), new THREE.MeshLambertMaterial({ color: 0x78909c }));
         rock.position.set(x*TILE, 0.25, y*TILE);
+        rock.castShadow = true;
         natureGroup.add(rock);
         rocks.push({ x, y, mesh: rock });
       }
@@ -299,16 +330,30 @@ function spawnSettlers() {
   while (settlerGroup.children.length) settlerGroup.remove(settlerGroup.children[0]);
   settlers = [];
   const count = Math.min(resources.pop, isMobile ? 8 : 15);
+  const colors = [0xffcc80, 0xffab91, 0xbcaaa4, 0x90a4ae, 0x81c784];
   for (let i = 0; i < count; i++) {
     const x = Math.floor(Math.random() * GRID);
     const y = Math.floor(Math.random() * GRID);
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 0.5, 4), new THREE.MeshLambertMaterial({ color: 0xffcc80 }));
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.12, 4, 3), new THREE.MeshLambertMaterial({ color: 0xffdbac }));
-    body.position.set(x*TILE, 0.35, y*TILE);
-    head.position.set(x*TILE, 0.7, y*TILE);
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.65, 6), new THREE.MeshLambertMaterial({ color: colors[i % colors.length] }));
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 4), new THREE.MeshLambertMaterial({ color: 0xffdbac }));
+    body.position.set(x*TILE, 0.4, y*TILE);
+    head.position.set(x*TILE, 0.85, y*TILE);
+    body.castShadow = true;
     settlerGroup.add(body, head);
-    settlers.push({ x, y, targetX: x, targetY: y, job: 'idle', mesh: { body, head }, onRoad: false, animOffset: Math.random() * Math.PI * 2 });
+    settlers.push({ x, y, targetX: x, targetY: y, job: 'idle', mesh: { body, head }, onRoad: false, animOffset: Math.random() * Math.PI * 2, path: [] });
   }
+}
+function findPath(sx, sy, tx, ty) {
+  if (roadTiles.has(Math.round(tx)+','+Math.round(ty))) return [{x: tx, y: ty}];
+  const roads = [...roadTiles].map(k => k.split(',').map(Number));
+  if (roads.length === 0) return [{x: tx, y: ty}];
+  let closest = roads[0];
+  let minDist = Infinity;
+  roads.forEach(([rx, ry]) => {
+    const d = Math.abs(rx - tx) + Math.abs(ry - ty);
+    if (d < minDist) { minDist = d; closest = [rx, ry]; }
+  });
+  return [{x: closest[0], y: closest[1]}, {x: tx, y: ty}];
 }
 function findWork(s) {
   const foresters = buildings.filter(b => b.type === 'forester');
@@ -318,6 +363,7 @@ function findWork(s) {
       const px = Math.max(0, Math.min(GRID-1, f.x + Math.floor((Math.random()-0.5)*6)));
       const py = Math.max(0, Math.min(GRID-1, f.y + Math.floor((Math.random()-0.5)*6)));
       if (!riverTiles.has(px+','+py) && !roadTiles.has(px+','+py) && !buildings.some(b => b.x===px && b.y===py) && !trees.some(t => t.x===px && t.y===py)) {
+        s.path = findPath(s.x, s.y, px, py);
         s.targetX = px;
         s.targetY = py;
         s.job = 'plant';
@@ -331,6 +377,7 @@ function findWork(s) {
     const nearby = trees.filter(t => Math.abs(t.x - lj.x) + Math.abs(t.y - lj.y) < 8);
     if (nearby.length) {
       const t = nearby[Math.floor(Math.random() * nearby.length)];
+      s.path = findPath(s.x, s.y, t.x, t.y);
       s.targetX = t.x;
       s.targetY = t.y;
       s.job = 'chop';
@@ -341,6 +388,7 @@ function findWork(s) {
   const works = buildings.filter(b => ['farm','mine','bakery','lumber','smith'].includes(b.type));
   if (works.length && Math.random() > 0.35) {
     const w = works[Math.floor(Math.random() * works.length)];
+    s.path = findPath(s.x, s.y, w.x, w.y);
     s.targetX = w.x;
     s.targetY = w.y;
     s.job = 'work';
@@ -350,6 +398,12 @@ function findWork(s) {
   s.targetY = Math.max(0, Math.min(GRID-1, s.y + (Math.random()-0.5)*5));
   s.job = 'idle';
 }
+function spawnParticle(x, y, color) {
+  const p = new THREE.Mesh(new THREE.SphereGeometry(0.08, 4, 3), new THREE.MeshBasicMaterial({ color }));
+  p.position.set(x*TILE, 0.5, y*TILE);
+  particleGroup.add(p);
+  particles.push({ mesh: p, life: 1.0, vx: (Math.random()-0.5)*0.5, vy: 1.5 + Math.random(), vz: (Math.random()-0.5)*0.5 });
+}
 function plantTree(x, y) {
   const age = 0.3;
   const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 0.6, 4), new THREE.MeshLambertMaterial({ color: 0x5d4037 }));
@@ -358,33 +412,50 @@ function plantTree(x, y) {
   leaves.position.set(x*TILE, 0.9, y*TILE);
   natureGroup.add(trunk, leaves);
   trees.push({ x, y, age, mesh: { trunk, leaves } });
+  spawnParticle(x, y, 0x4caf50);
+  playSound(440, 0.1);
 }
 function updateSettlers() {
   settlers.forEach(s => {
     if (Math.random() > 0.91) findWork(s);
-    const dx = s.targetX - s.x;
-    const dy = s.targetY - s.y;
-    const dist = Math.sqrt(dx*dx + dy*dy);
-    const speed = (s.onRoad ? 0.06 : 0.03) * (s.job === 'chop' || s.job === 'work' || s.job === 'plant' ? 1.3 : 1);
-    if (dist > 0.3) {
-      s.x += (dx / dist) * speed * 5;
-      s.y += (dy / dist) * speed * 5;
+    if (s.path && s.path.length > 0) {
+      const next = s.path[0];
+      const dx = next.x - s.x;
+      const dy = next.y - s.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < 0.4) s.path.shift();
+      else {
+        const speed = s.onRoad ? 0.08 : 0.04;
+        s.x += (dx / dist) * speed * 5;
+        s.y += (dy / dist) * speed * 5;
+      }
+    } else {
+      const dx = s.targetX - s.x;
+      const dy = s.targetY - s.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      const speed = (s.onRoad ? 0.06 : 0.03) * (s.job === 'chop' || s.job === 'work' || s.job === 'plant' ? 1.3 : 1);
+      if (dist > 0.3) {
+        s.x += (dx / dist) * speed * 5;
+        s.y += (dy / dist) * speed * 5;
+      }
     }
     s.onRoad = roadTiles.has(Math.round(s.x) + ',' + Math.round(s.y));
     if (s.mesh) {
-      const bob = Math.sin(animTime * 8 + s.animOffset) * 0.04;
-      s.mesh.body.position.set(s.x*TILE, 0.35 + bob, s.y*TILE);
-      s.mesh.head.position.set(s.x*TILE, 0.7 + bob, s.y*TILE);
+      const bob = Math.sin(animTime * 10 + s.animOffset) * 0.06;
+      s.mesh.body.position.set(s.x*TILE, 0.4 + bob, s.y*TILE);
+      s.mesh.head.position.set(s.x*TILE, 0.85 + bob, s.y*TILE);
       if (s.job === 'chop' || s.job === 'work' || s.job === 'plant') {
-        s.mesh.body.rotation.z = Math.sin(animTime * 12 + s.animOffset) * 0.15;
+        s.mesh.body.rotation.z = Math.sin(animTime * 15 + s.animOffset) * 0.2;
       } else {
         s.mesh.body.rotation.z = 0;
       }
     }
-    if (s.job === 'chop' && s.chopTarget && dist < 0.5 && Math.random() > 0.92) {
+    if (s.job === 'chop' && s.chopTarget && Math.abs(s.x - s.chopTarget.x) < 0.6 && Math.abs(s.y - s.chopTarget.y) < 0.6 && Math.random() > 0.92) {
       resources.wood += 3 + Math.random()*2;
       stats.produced += 3;
       showFeedback(s.x*TILE, '+3 🪵');
+      spawnParticle(s.chopTarget.x, s.chopTarget.y, 0x5d4037);
+      playSound(180, 0.15, 'sawtooth');
       if (s.chopTarget.mesh) {
         natureGroup.remove(s.chopTarget.mesh.trunk);
         natureGroup.remove(s.chopTarget.mesh.leaves);
@@ -393,7 +464,7 @@ function updateSettlers() {
       s.chopTarget = null;
       s.job = 'idle';
     }
-    if (s.job === 'plant' && dist < 0.5 && Math.random() > 0.93) {
+    if (s.job === 'plant' && Math.abs(s.x - s.targetX) < 0.6 && Math.abs(s.y - s.targetY) < 0.6 && Math.random() > 0.93) {
       const px = Math.round(s.x);
       const py = Math.round(s.y);
       if (!trees.some(t => t.x===px && t.y===py)) {
@@ -402,10 +473,24 @@ function updateSettlers() {
       }
       s.job = 'idle';
     }
-    if (s.job === 'work' && dist < 0.5 && Math.random() > 0.94) {
+    if (s.job === 'work' && Math.abs(s.x - s.targetX) < 0.6 && Math.abs(s.y - s.targetY) < 0.6 && Math.random() > 0.94) {
       resources.food += 0.2;
       resources.wood += 0.1;
+      spawnParticle(s.x, s.y, 0xffeb3b);
     }
+  });
+  particles = particles.filter(p => {
+    p.life -= 0.02;
+    p.mesh.position.x += p.vx * 0.05;
+    p.mesh.position.y += p.vy * 0.05;
+    p.mesh.position.z += p.vz * 0.05;
+    p.vy -= 0.05;
+    p.mesh.material.opacity = p.life;
+    if (p.life <= 0) {
+      particleGroup.remove(p.mesh);
+      return false;
+    }
+    return true;
   });
 }
 function showFeedback(worldX, text) {
@@ -417,6 +502,26 @@ function showFeedback(worldX, text) {
   fb.style.opacity = '1';
   setTimeout(() => fb.style.opacity = '0', 800);
 }
+function showBuildingInfo(b) {
+  const panel = document.getElementById('info-panel');
+  const bt = buildingTypes[b.type];
+  let info = '<b>' + bt.name + '</b> (úroveň ' + (b.level||1) + ')<br>';
+  if (bt.prod) {
+    info += 'Produkuje: ';
+    for (const [k, v] of Object.entries(bt.prod)) {
+      info += k + ' +' + (v * (b.level||1)).toFixed(1) + ' ';
+    }
+  }
+  if (bt.consume) {
+    info += '<br>Spotreba: ';
+    for (const [k, v] of Object.entries(bt.consume)) {
+      info += k + ' -' + v + ' ';
+    }
+  }
+  panel.innerHTML = info;
+  panel.style.display = 'block';
+  setTimeout(() => panel.style.display = 'none', 4000);
+}
 function createBuilding(type, x, y, level = 1) {
   const bt = buildingTypes[type];
   const group = new THREE.Group();
@@ -425,16 +530,20 @@ function createBuilding(type, x, y, level = 1) {
   if (type === 'townhall') {
     const base = new THREE.Mesh(new THREE.BoxGeometry(TILE*0.85, height*0.6, TILE*0.85), bodyMat);
     base.position.y = height*0.3;
+    base.castShadow = true;
     group.add(base);
     const mid = new THREE.Mesh(new THREE.BoxGeometry(TILE*0.65, height*0.5, TILE*0.65), bodyMat);
     mid.position.y = height*0.75;
+    mid.castShadow = true;
     group.add(mid);
     const top = new THREE.Mesh(new THREE.BoxGeometry(TILE*0.45, height*0.3, TILE*0.45), bodyMat);
     top.position.y = height*1.1;
+    top.castShadow = true;
     group.add(top);
     const roof = new THREE.Mesh(new THREE.ConeGeometry(TILE*0.35, height*0.4, 4), new THREE.MeshLambertMaterial({ map: textures.roof }));
     roof.position.y = height*1.4;
     roof.rotation.y = Math.PI / 4;
+    roof.castShadow = true;
     group.add(roof);
     const flag = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.35, 0.18), new THREE.MeshLambertMaterial({ color: 0xe94560 }));
     flag.position.set(0, height*1.65, 0);
@@ -451,18 +560,23 @@ function createBuilding(type, x, y, level = 1) {
   } else {
     const body = new THREE.Mesh(new THREE.BoxGeometry(TILE*0.65, height, TILE*0.65), bodyMat);
     body.position.y = height / 2;
+    body.castShadow = true;
     group.add(body);
     const roof = new THREE.Mesh(new THREE.ConeGeometry(TILE*0.45, height * 0.45, 4), new THREE.MeshLambertMaterial({ map: textures.roof }));
     roof.position.y = height + 0.15;
     roof.rotation.y = Math.PI / 4;
+    roof.castShadow = true;
     group.add(roof);
     const door = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.35, 0.05), new THREE.MeshLambertMaterial({ color: 0x3e2723 }));
     door.position.set(0, 0.2, TILE*0.33);
     group.add(door);
+    const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.4, 0.12), new THREE.MeshLambertMaterial({ color: 0x5d4037 }));
+    chimney.position.set(0.2, height + 0.3, 0.2);
+    group.add(chimney);
   }
   if (['mine','bakery','smith','lumber'].includes(type)) {
     const smoke = new THREE.Mesh(new THREE.SphereGeometry(0.15, 4, 3), new THREE.MeshLambertMaterial({ color: 0xaaaaaa, transparent: true, opacity: 0.6 }));
-    smoke.position.y = height + 0.5;
+    smoke.position.y = height + 0.6;
     smoke.userData = { type: 'smoke', offset: Math.random() * Math.PI * 2 };
     group.add(smoke);
   }
@@ -526,6 +640,7 @@ function showUpgradeMenu(building) {
       while (buildingGroup.children.length) buildingGroup.remove(buildingGroup.children[0]);
       buildings.forEach(b => createBuilding(b.type, b.x, b.y, b.level || 1));
       log('Radnica vylepšená na úroveň ' + building.level + '!');
+      playSound(660, 0.2);
       updateUI();
       menu.style.display = 'none';
     } else {
@@ -553,10 +668,12 @@ function updateTradeMenu() {
         resources[t.res] -= t.amount;
         resources.gold += t.gold;
         log('Predané!');
+        playSound(520, 0.1);
       } else if (t.gold < 0 && resources.gold >= -t.gold) {
         resources.gold += t.gold;
         resources[t.res] = (resources[t.res]||0) - t.amount;
         log('Kúpené!');
+        playSound(480, 0.1);
       } else log('Nedostatok zdrojov');
       updateUI();
     };
@@ -570,6 +687,7 @@ function saveGame(slot) {
   };
   localStorage.setItem('epochSave' + slot, JSON.stringify(data));
   log('Uložené do slotu ' + slot);
+  playSound(600, 0.15);
 }
 function loadGame(slot) {
   const raw = localStorage.getItem('epochSave' + slot);
@@ -595,6 +713,7 @@ function loadGame(slot) {
     updateBuildMenu();
     updateUI();
     log('Načítané zo slotu ' + slot);
+    playSound(500, 0.15);
   } catch(e) { log('Chyba načítania'); }
 }
 document.getElementById('btn-save1').onclick = () => saveGame(1);
@@ -612,6 +731,7 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.classList.add('selected');
     mode = btn.dataset.mode;
     document.getElementById('upgrade-menu').style.display = 'none';
+    document.getElementById('info-panel').style.display = 'none';
     if (mode === 'center') {
       controls.target.set(GRID*TILE/2, 0, GRID*TILE/2);
       camera.position.set(GRID*TILE/2, 28, GRID*TILE/2 + 20);
@@ -631,6 +751,12 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     const x = Math.round(p.x / TILE);
     const y = Math.round(p.z / TILE);
     if (x >= 0 && x < GRID && y >= 0 && y < GRID) {
+      if (mode === 'info') {
+        const b = buildings.find(b => b.x === x && b.y === y);
+        if (b) showBuildingInfo(b);
+        else log('Klikni na budovu');
+        return;
+      }
       if (mode === 'upgrade') {
         const th = buildings.find(b => b.type === 'townhall' && b.x === x && b.y === y);
         if (th) {
@@ -649,6 +775,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
           addNature();
           showFeedback(x*TILE, 'Cesta');
           log('Cesta postavená');
+          playSound(300, 0.1);
           updateUI();
         } else log('Nedostatok kameňa');
       }
@@ -660,6 +787,8 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
         resources.iron += Math.random() > 0.75 ? 1 : 0;
         stats.produced += 3;
         showFeedback(x*TILE, '+3 🪨');
+        spawnParticle(x, y, 0x78909c);
+        playSound(150, 0.12, 'square');
         log('Vyťažené');
         updateUI();
       }
@@ -678,6 +807,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
           tryAutoRoad(x, y);
           spawnSettlers();
           showFeedback(x*TILE, bt.name);
+          playSound(400, 0.15);
           log('Postavené: ' + bt.name);
           updateUI();
         } else log('Nedostatok zdrojov');
@@ -692,7 +822,7 @@ function animate() {
   buildingGroup.children.forEach(group => {
     group.children.forEach(child => {
       if (child.userData && child.userData.type === 'smoke') {
-        child.position.y = (child.parent.children[0].geometry.parameters.height || 1) + 0.4 + Math.sin(animTime * 3 + child.userData.offset) * 0.15;
+        child.position.y = (child.parent.children[0].geometry.parameters.height || 1) + 0.5 + Math.sin(animTime * 3 + child.userData.offset) * 0.15;
         child.scale.setScalar(0.8 + Math.sin(animTime * 4 + child.userData.offset) * 0.3);
       }
       if (child.userData && child.userData.type === 'crop') {
@@ -750,21 +880,24 @@ setInterval(() => {
     resources.bread -= 0.3;
     resources.happiness += 0.3;
   }
-  if (weather === 'rain') resources.water += 0.5;
+  if (weather === 'rain') {
+    resources.water += 0.5;
+    if (Math.random() > 0.7) playSound(800 + Math.random()*200, 0.05, 'sine');
+  }
   resources.belief += resources.pop * 0.005;
   resources.science += buildings.filter(b => b.type === 'church').length * 0.1;
   if (resources.happiness < 30 && Math.random() > 0.7) resources.pop = Math.max(4, resources.pop - 1);
   if (resources.pop > stats.maxPop) stats.maxPop = resources.pop;
-  if (era < 1 && resources.belief > 150 && resources.science > 20) { era = 1; log('Nová éra: Doba kamenná!'); }
-  if (era < 2 && resources.belief > 300 && resources.science > 60 && resources.iron > 20) { era = 2; log('Nová éra: Doba bronzová!'); }
+  if (era < 1 && resources.belief > 150 && resources.science > 20) { era = 1; log('Nová éra: Doba kamenná!'); playSound(700, 0.3); }
+  if (era < 2 && resources.belief > 300 && resources.science > 60 && resources.iron > 20) { era = 2; log('Nová éra: Doba bronzová!'); playSound(800, 0.4); }
   resources.happiness = Math.max(10, Math.min(100, resources.happiness));
   dayTime = (dayTime + 1) % 120;
   if (dayTime < 20 || dayTime > 100) {
     scene.background = new THREE.Color(0x1a237e);
-    ambient.intensity = 0.4;
+    ambient.intensity = 0.35;
   } else {
     scene.background = new THREE.Color(0x64b5f6);
-    ambient.intensity = 0.8;
+    ambient.intensity = 0.6;
   }
   if (Math.random() > 0.97) weather = weather === 'clear' ? 'rain' : 'clear';
   updateUI();
@@ -782,7 +915,7 @@ spawnSettlers();
 updateBuildMenu();
 updateUI();
 animate();
-log('Radnica má teraz detailnejší model (veža, okná, dvere)!');
+log('Vylepšenia: väčší obyvatelia, častice, info panel (ℹ️), zvuky, tiene, komíny!');
 </script>
 </body>
 </html>
