@@ -543,6 +543,8 @@ function updateSettlers() {
         s.mesh.body.rotation.z = 0;
       }
     }
+    // The target tree may already be gone (felled by another settler or cleared by a building).
+    if (s.job === 'chop' && s.chopTarget && !trees.includes(s.chopTarget)) { s.chopTarget = null; s.job = 'idle'; }
     if (s.job === 'chop' && s.chopTarget && Math.abs(s.x - s.chopTarget.x) < 0.5 && Math.abs(s.y - s.chopTarget.y) < 0.5 && Math.random() > 0.92) {
       resources.wood += 3 + Math.random()*2;
       stats.produced += 3;
