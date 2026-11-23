@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0a0a1a">
 <title>Epoch Settlers 3D</title>
 <style>
@@ -42,7 +41,7 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0a0a1a; c
 .mode-btn.selected, .build-btn.selected { background: #e94560; }
 #build-menu { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
 #log { font-size: 13px; color: #a8dadc; margin: 6px 0; min-height: 18px; text-align: center; }
-#canvas-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; background: #1a237e; }
+#canvas-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
 canvas { display: block; width: 100% !important; height: 100% !important; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -74,76 +73,40 @@ canvas { display: block; width: 100% !important; height: 100% !important; }
 <div id="canvas-container"></div>
 <script>
 const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
-function makeBetterTexture(baseHex, variation = 60, size = 128, detail = true) {
-  const c = document.createElement('canvas');
-  c.width = c.height = size;
-  const ctx = c.getContext('2d');
-  const r = parseInt(baseHex.slice(1,3),16), g = parseInt(baseHex.slice(3,5),16), b = parseInt(baseHex.slice(5,7),16);
-  ctx.fillStyle = baseHex;
-  ctx.fillRect(0, 0, size, size);
-  for (let i = 0; i < variation * 3; i++) {
-    const vr = Math.max(0, Math.min(255, r + (Math.random()-0.5)*70));
-    const vg = Math.max(0, Math.min(255, g + (Math.random()-0.5)*50));
-    const vb = Math.max(0, Math.min(255, b + (Math.random()-0.5)*30));
-    ctx.fillStyle = `rgba(${vr},${vg},${vb},${0.1 + Math.random()*0.2})`;
-    const s = 2 + Math.random()*5;
-    ctx.fillRect(Math.random()*size, Math.random()*size, s, s);
-  }
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(3, 3);
-  return tex;
-}
-const texGrass = makeBetterTexture('#2e7d32', 50, 128, true);
-const texWood = makeBetterTexture('#5d4037', 30, 128, true);
-const texStone = makeBetterTexture('#546e7a', 40, 128, true);
-const texWater = makeBetterTexture('#0277bd', 20, 64, false);
-const GRID = isMobile ? 16 : 20, TILE = 2;
+const GRID = isMobile ? 12 : 16, TILE = 2;
 let mode = 'build', selectedBuilding = 'hut';
-let resources = { food: 200, wood: 150, stone: 100, water: 50, coal: 0, iron: 0, pop: 12, belief: 70, science: 0 };
+let resources = { food: 200, wood: 150, stone: 100, water: 50, coal: 0, iron: 0, pop: 12, belief: 70 };
 let terrainHeights = Array.from({length: GRID}, () => Array(GRID).fill(0));
 let buildings = [];
 let trees = [];
-let rocks = [];
 let settlers = [];
 let riverTiles = new Set();
-let lakeTiles = new Set();
 const buildingTypes = {
-  hut: { name: "Chata", cost: { wood: 6, stone: 3 }, prod: { food: 1.2 }, height: 1.4, color: 0x8d6e63 },
-  farm: { name: "Farma", cost: { wood: 8, stone: 4 }, prod: { food: 4.5 }, height: 1.1, color: 0x66bb6a },
-  house: { name: "Dom", cost: { wood: 10, stone: 6 }, prod: { pop: 2 }, height: 2.0, color: 0xffcc80 },
-  mine: { name: "Baňa", cost: { wood: 5, stone: 10 }, prod: { stone: 1.5, coal: 0.4 }, height: 1.6, color: 0x78909c },
-  well: { name: "Studňa", cost: { wood: 4, stone: 8 }, prod: { water: 3 }, height: 1.0, color: 0x90a4ae }
+  hut: { name: "Chata", cost: { wood: 6, stone: 3 }, prod: { food: 1 }, height: 1.2, color: 0x8d6e63 },
+  farm: { name: "Farma", cost: { wood: 8, stone: 4 }, prod: { food: 3 }, height: 1.0, color: 0x66bb6a },
+  house: { name: "Dom", cost: { wood: 10, stone: 6 }, prod: { pop: 2 }, height: 1.8, color: 0xffcc80 },
+  mine: { name: "Baňa", cost: { wood: 5, stone: 10 }, prod: { stone: 1 }, height: 1.4, color: 0x78909c }
 };
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x4fc3f7);
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 200);
-camera.position.set(GRID*TILE/2, 14, GRID*TILE/2 + 10);
-const renderer = new THREE.WebGLRenderer({ 
-  antialias: false, 
-  powerPreference: "default",
-  alpha: false,
-  stencil: false,
-  depth: true
-});
+scene.background = new THREE.Color(0x64b5f6);
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth/window.innerHeight, 0.1, 150);
+camera.position.set(GRID*TILE/2, 12, GRID*TILE/2 + 8);
+camera.lookAt(GRID*TILE/2, 0, GRID*TILE/2);
+const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
-renderer.setClearColor(0x4fc3f7);
+renderer.setPixelRatio(1);
+renderer.setClearColor(0x64b5f6);
 document.getElementById('canvas-container').appendChild(renderer.domElement);
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.target.set(GRID*TILE/2, 0, GRID*TILE/2);
 controls.enableDamping = true;
-controls.maxPolarAngle = Math.PI / 2.1;
-controls.minDistance = 6;
-controls.maxDistance = 35;
-controls.enablePan = true;
-controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
-const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+controls.maxPolarAngle = Math.PI / 2.2;
+controls.minDistance = 5;
+controls.maxDistance = 30;
+const ambient = new THREE.AmbientLight(0xffffff, 0.8);
 scene.add(ambient);
-const hemi = new THREE.HemisphereLight(0x4fc3f7, 0x2e7d32, 0.6);
-scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-sun.position.set(15, 25, 10);
+const sun = new THREE.DirectionalLight(0xffffff, 0.6);
+sun.position.set(10, 20, 8);
 scene.add(sun);
 const terrainGroup = new THREE.Group();
 scene.add(terrainGroup);
@@ -151,181 +114,95 @@ const buildingGroup = new THREE.Group();
 scene.add(buildingGroup);
 const natureGroup = new THREE.Group();
 scene.add(natureGroup);
-const waterGroup = new THREE.Group();
-scene.add(waterGroup);
 const settlerGroup = new THREE.Group();
 scene.add(settlerGroup);
-function noise(x, y) {
-  const n = Math.sin(x * 0.7 + y * 0.3) * Math.cos(y * 0.5 - x * 0.2);
-  return (n + 1) * 0.5;
-}
-function generateProceduralTerrain() {
+function generateTerrain() {
   for (let y = 0; y < GRID; y++) {
     for (let x = 0; x < GRID; x++) {
-      let h = noise(x * 0.15, y * 0.15) * 3.5;
-      h += noise(x * 0.4, y * 0.4) * 1.2;
-      terrainHeights[y][x] = Math.max(0, h - 1);
+      terrainHeights[y][x] = Math.max(0, Math.sin(x * 0.4) * Math.cos(y * 0.3) * 2);
     }
   }
-  for (let y = 2; y < GRID - 2; y++) {
-    const x = Math.floor(GRID / 2) + Math.floor(Math.sin(y * 0.3) * 1.5);
-    if (x >= 0 && x < GRID) {
-      riverTiles.add(x + ',' + y);
-      terrainHeights[y][x] = 0;
-    }
+  for (let y = 1; y < GRID - 1; y++) {
+    const x = Math.floor(GRID / 2);
+    riverTiles.add(x + ',' + y);
+    terrainHeights[y][x] = 0;
   }
-  const lakeCenters = [
-    { x: Math.floor(GRID * 0.28), y: Math.floor(GRID * 0.32), r: 1.8 },
-    { x: Math.floor(GRID * 0.72), y: Math.floor(GRID * 0.68), r: 1.4 }
-  ];
-  lakeCenters.forEach(lake => {
-    for (let dy = -lake.r; dy <= lake.r; dy++) {
-      for (let dx = -lake.r; dx <= lake.r; dx++) {
-        if (dx*dx + dy*dy <= lake.r*lake.r) {
-          const lx = lake.x + dx, ly = lake.y + dy;
-          if (lx >= 0 && lx < GRID && ly >= 0 && ly < GRID && !riverTiles.has(lx + ',' + ly)) {
-            lakeTiles.add(lx + ',' + ly);
-            terrainHeights[ly][lx] = 0;
-          }
-        }
-      }
-    }
-  });
-}
-function getVegetationZone(x, y) {
-  const h = terrainHeights[y][x];
-  const nearWater = [...riverTiles, ...lakeTiles].some(t => {
-    const [rx, ry] = t.split(',').map(Number);
-    return Math.abs(rx - x) + Math.abs(ry - y) < 3;
-  });
-  if (nearWater) return 'riverside';
-  if (h > 2.2) return 'forest';
-  if (h > 1.0) return 'woods';
-  return 'grassland';
 }
 function createTerrain() {
-  terrainGroup.clear();
-  waterGroup.clear();
-  const geo = new THREE.BoxGeometry(TILE, 0.5, TILE);
-  const matGrass = new THREE.MeshLambertMaterial({ map: texGrass });
-  const matWater = new THREE.MeshLambertMaterial({ map: texWater, transparent: true, opacity: 0.7 });
-  const waterCount = riverTiles.size + lakeTiles.size;
-  const instGrass = new THREE.InstancedMesh(geo, matGrass, GRID*GRID);
-  const instWater = new THREE.InstancedMesh(geo, matWater, Math.max(1, waterCount));
-  const dummy = new THREE.Object3D();
-  let gi = 0, wi = 0;
-  for (let y = 0; y < GRID; y++) for (let x = 0; x < GRID; x++) {
-    const isWater = riverTiles.has(x + ',' + y) || lakeTiles.has(x + ',' + y);
-    const h = terrainHeights[y][x];
-    const height = isWater ? 0.15 : 0.5 + Math.abs(h) * 0.25;
-    dummy.position.set(x*TILE, height/2, y*TILE);
-    dummy.scale.y = height;
-    dummy.updateMatrix();
-    if (isWater && wi < waterCount) instWater.setMatrixAt(wi++, dummy.matrix);
-    else instGrass.setMatrixAt(gi++, dummy.matrix);
-  }
-  instGrass.instanceMatrix.needsUpdate = true;
-  instWater.instanceMatrix.needsUpdate = true;
-  terrainGroup.add(instGrass);
-  waterGroup.add(instWater);
-}
-function addNature() {
-  natureGroup.clear();
-  trees = [];
-  rocks = [];
+  while (terrainGroup.children.length) terrainGroup.remove(terrainGroup.children[0]);
+  const geo = new THREE.BoxGeometry(TILE, 0.4, TILE);
+  const matGrass = new THREE.MeshLambertMaterial({ color: 0x4caf50 });
+  const matWater = new THREE.MeshLambertMaterial({ color: 0x2196f3 });
   for (let y = 0; y < GRID; y++) {
     for (let x = 0; x < GRID; x++) {
-      if (riverTiles.has(x + ',' + y) || lakeTiles.has(x + ',' + y) || buildings.some(b => Math.abs(b.x - x) < 1 && Math.abs(b.y - y) < 1)) continue;
-      const zone = getVegetationZone(x, y);
-      const h = Math.max(0, terrainHeights[y][x] * 0.2);
-      if (zone === 'forest' && Math.random() > 0.4) {
-        const age = 0.8 + Math.random() * 0.4;
-        trees.push({ x, y, age, zone, mesh: null });
-        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.14*age, 0.2*age, 1.5*age, 5), new THREE.MeshLambertMaterial({ map: texWood }));
-        const leaves = new THREE.Mesh(new THREE.SphereGeometry(0.8*age, 6, 5), new THREE.MeshLambertMaterial({ color: 0x1b5e20 }));
-        trunk.position.set(x*TILE, h + 0.75*age, y*TILE);
-        leaves.position.set(x*TILE, h + 1.6*age, y*TILE);
+      const isRiver = riverTiles.has(x + ',' + y);
+      const h = terrainHeights[y][x];
+      const height = isRiver ? 0.1 : 0.4 + h * 0.3;
+      const mesh = new THREE.Mesh(geo, isRiver ? matWater : matGrass);
+      mesh.position.set(x*TILE, height/2, y*TILE);
+      mesh.scale.y = height;
+      terrainGroup.add(mesh);
+    }
+  }
+}
+function addNature() {
+  while (natureGroup.children.length) natureGroup.remove(natureGroup.children[0]);
+  trees = [];
+  for (let y = 0; y < GRID; y++) {
+    for (let x = 0; x < GRID; x++) {
+      if (riverTiles.has(x + ',' + y)) continue;
+      if (Math.random() > 0.6) {
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 1.2, 4), new THREE.MeshLambertMaterial({ color: 0x5d4037 }));
+        const leaves = new THREE.Mesh(new THREE.SphereGeometry(0.6, 5, 4), new THREE.MeshLambertMaterial({ color: 0x2e7d32 }));
+        trunk.position.set(x*TILE, 0.7, y*TILE);
+        leaves.position.set(x*TILE, 1.5, y*TILE);
         natureGroup.add(trunk, leaves);
-        trees[trees.length-1].mesh = { trunk, leaves };
-      } else if (zone === 'woods' && Math.random() > 0.6) {
-        const age = 0.6 + Math.random() * 0.3;
-        trees.push({ x, y, age, zone, mesh: null });
-        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12*age, 0.16*age, 1.2*age, 5), new THREE.MeshLambertMaterial({ map: texWood }));
-        const leaves = new THREE.Mesh(new THREE.SphereGeometry(0.6*age, 5, 4), new THREE.MeshLambertMaterial({ color: 0x388e3c }));
-        trunk.position.set(x*TILE, h + 0.6*age, y*TILE);
-        leaves.position.set(x*TILE, h + 1.3*age, y*TILE);
-        natureGroup.add(trunk, leaves);
-        trees[trees.length-1].mesh = { trunk, leaves };
-      } else if (zone === 'riverside' && Math.random() > 0.75) {
-        const bush = new THREE.Mesh(new THREE.SphereGeometry(0.3, 4, 3), new THREE.MeshLambertMaterial({ color: 0x66bb6a }));
-        bush.position.set(x*TILE, h + 0.25, y*TILE);
-        natureGroup.add(bush);
-      } else if (zone === 'grassland' && Math.random() > 0.88) {
-        const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.25 + Math.random()*0.15, 0), new THREE.MeshLambertMaterial({ map: texStone }));
-        rock.position.set(x*TILE, 0.2, y*TILE);
-        natureGroup.add(rock);
-        rocks.push({ x, y, mesh: rock });
+        trees.push({ x, y });
       }
     }
   }
 }
 function spawnSettlers() {
-  settlerGroup.clear();
+  while (settlerGroup.children.length) settlerGroup.remove(settlerGroup.children[0]);
   settlers = [];
-  const count = Math.min(resources.pop, isMobile ? 6 : 10);
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < Math.min(resources.pop, 6); i++) {
     const x = Math.floor(Math.random() * GRID);
     const y = Math.floor(Math.random() * GRID);
-    const settler = { x, y, targetX: x, targetY: y, job: 'idle', mesh: null, speed: 0.02 };
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.18, 0.6, 5), new THREE.MeshLambertMaterial({ color: 0xffcc80 }));
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 5, 4), new THREE.MeshLambertMaterial({ color: 0xffdbac }));
-    body.position.set(x*TILE, 0.4, y*TILE);
-    head.position.set(x*TILE, 0.8, y*TILE);
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 0.5, 4), new THREE.MeshLambertMaterial({ color: 0xffcc80 }));
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.12, 4, 3), new THREE.MeshLambertMaterial({ color: 0xffdbac }));
+    body.position.set(x*TILE, 0.35, y*TILE);
+    head.position.set(x*TILE, 0.7, y*TILE);
     settlerGroup.add(body, head);
-    settler.mesh = { body, head };
-    settlers.push(settler);
+    settlers.push({ x, y, mesh: { body, head } });
   }
 }
 function updateSettlers() {
   settlers.forEach(s => {
-    if (Math.random() > 0.94) {
-      s.targetX = Math.max(0, Math.min(GRID-1, s.x + (Math.random()-0.5)*4));
-      s.targetY = Math.max(0, Math.min(GRID-1, s.y + (Math.random()-0.5)*4));
-      s.job = Math.random() > 0.4 ? 'gather' : 'idle';
-    }
-    const dx = s.targetX - s.x;
-    const dy = s.targetY - s.y;
-    const dist = Math.sqrt(dx*dx + dy*dy);
-    if (dist > 0.2) {
-      s.x += (dx / dist) * s.speed * 6;
-      s.y += (dy / dist) * s.speed * 6;
+    if (Math.random() > 0.95) {
+      s.x = Math.max(0, Math.min(GRID-1, s.x + (Math.random()-0.5)*3));
+      s.y = Math.max(0, Math.min(GRID-1, s.y + (Math.random()-0.5)*3));
     }
     if (s.mesh) {
-      s.mesh.body.position.set(s.x*TILE, 0.4, s.y*TILE);
-      s.mesh.head.position.set(s.x*TILE, 0.8, s.y*TILE);
-    }
-    if (s.job === 'gather' && Math.random() > 0.97) {
-      resources.wood += 0.3;
-      resources.food += 0.2;
+      s.mesh.body.position.set(s.x*TILE, 0.35, s.y*TILE);
+      s.mesh.head.position.set(s.x*TILE, 0.7, s.y*TILE);
     }
   });
 }
 function createBuilding(type, x, y) {
   const bt = buildingTypes[type];
   const group = new THREE.Group();
-  const bodyMat = new THREE.MeshLambertMaterial({ map: type === 'mine' || type === 'well' ? texStone : texWood, color: bt.color });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(TILE*0.7, bt.height, TILE*0.7), bodyMat);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(TILE*0.65, bt.height, TILE*0.65), new THREE.MeshLambertMaterial({ color: bt.color }));
   body.position.y = bt.height / 2;
   group.add(body);
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(TILE*0.5, bt.height * 0.45, 4), new THREE.MeshLambertMaterial({ color: 0x3e2723 }));
-  roof.position.y = bt.height + 0.15;
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(TILE*0.45, bt.height * 0.4, 4), new THREE.MeshLambertMaterial({ color: 0x3e2723 }));
+  roof.position.y = bt.height + 0.1;
   roof.rotation.y = Math.PI / 4;
   group.add(roof);
-  group.position.set(x*TILE, Math.max(0, terrainHeights[y][x]*0.2), y*TILE);
+  group.position.set(x*TILE, 0, y*TILE);
   buildingGroup.add(group);
 }
 function updateUI() {
-  ['food','wood','stone','water','coal','iron','pop','belief','science'].forEach(k => {
+  ['food','wood','stone','water','coal','iron','pop','belief'].forEach(k => {
     const el = document.getElementById('res-' + k);
     if (el) el.textContent = Math.floor(resources[k] || 0);
   });
@@ -362,15 +239,14 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     const x = Math.round(p.x / TILE);
     const y = Math.round(p.z / TILE);
     if (x >= 0 && x < GRID && y >= 0 && y < GRID) {
-      if (mode === 'sculpt-up') { terrainHeights[y][x] = Math.min(5, terrainHeights[y][x] + 1); createTerrain(); addNature(); log('Terén zvýšený'); }
-      else if (mode === 'sculpt-down') { terrainHeights[y][x] = Math.max(-1, terrainHeights[y][x] - 1); createTerrain(); addNature(); log('Terén znížený'); }
+      if (mode === 'sculpt-up') { terrainHeights[y][x] = Math.min(4, terrainHeights[y][x] + 1); createTerrain(); log('Zvýšené'); }
+      else if (mode === 'sculpt-down') { terrainHeights[y][x] = Math.max(0, terrainHeights[y][x] - 1); createTerrain(); log('Znížené'); }
       else if (mode === 'mine') {
-        resources.stone += 4 + Math.random()*2;
-        resources.coal += Math.random() > 0.5 ? 1 : 0;
-        log('Vyťažené suroviny');
+        resources.stone += 3;
+        log('Vyťažené');
         updateUI();
       }
-      else if (mode === 'build' && selectedBuilding && !buildings.some(b => b.x===x && b.y===y) && !riverTiles.has(x+','+y) && !lakeTiles.has(x+','+y)) {
+      else if (mode === 'build' && selectedBuilding && !buildings.some(b => b.x===x && b.y===y) && !riverTiles.has(x+','+y)) {
         const cost = buildingTypes[selectedBuilding].cost;
         if (resources.wood >= (cost.wood||0) && resources.stone >= (cost.stone||0)) {
           resources.wood -= cost.wood||0; resources.stone -= cost.stone||0;
@@ -378,7 +254,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
           createBuilding(selectedBuilding, x, y);
           if (selectedBuilding === 'house') resources.pop += 2;
           spawnSettlers();
-          log('Postavené: ' + buildingTypes[selectedBuilding].name);
+          log('Postavené');
           updateUI();
         } else log('Nedostatok zdrojov');
       }
@@ -394,18 +270,10 @@ function animate() {
 setInterval(() => {
   buildings.forEach(b => {
     const prod = buildingTypes[b.type].prod;
-    if (prod) Object.entries(prod).forEach(([k,v]) => resources[k] = (resources[k]||0) + v * 0.3);
+    if (prod) Object.entries(prod).forEach(([k,v]) => resources[k] = (resources[k]||0) + v * 0.25);
   });
-  trees.forEach(t => {
-    if (t.age < 1.2 && Math.random() > 0.92) {
-      t.age += 0.02;
-      if (t.mesh && t.mesh.trunk) t.mesh.trunk.scale.set(1, t.age, 1);
-      if (t.mesh && t.mesh.leaves) t.mesh.leaves.scale.set(t.age, t.age, t.age);
-    }
-  });
-  resources.belief += resources.pop * 0.01;
-  if (resources.food > resources.pop * 0.1) resources.food -= resources.pop * 0.03;
-  if (resources.water > 0) resources.water -= resources.pop * 0.015;
+  resources.belief += resources.pop * 0.008;
+  if (resources.food > 5) resources.food -= resources.pop * 0.02;
   updateUI();
 }, 1000);
 window.addEventListener('resize', () => {
@@ -413,14 +281,14 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
-generateProceduralTerrain();
+generateTerrain();
 createTerrain();
 addNature();
 spawnSettlers();
 updateBuildMenu();
 updateUI();
 animate();
-log('Mapa načítaná! Otáčaj jedným prstom, zoom dvoma.');
+log('Jednoduchá verzia pre iPhone. Otáčaj prstom.');
 </script>
 </body>
 </html>
