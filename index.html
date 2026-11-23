@@ -1058,8 +1058,8 @@ setInterval(() => {
   resources.science += buildings.filter(b => b.type === 'church').length * 0.1;
   if (resources.happiness < 30 && Math.random() > 0.7) resources.pop = Math.max(4, resources.pop - 1);
   if (resources.pop > stats.maxPop) stats.maxPop = resources.pop;
-  if (era < 1 && resources.belief > 150 && resources.science > 20) { era = 1; log('Nová éra: Doba kamenná!'); playSound(700, 0.3); }
-  if (era < 2 && resources.belief > 300 && resources.science > 60 && resources.iron > 20) { era = 2; log('Nová éra: Doba bronzová!'); playSound(800, 0.4); }
+  if (era < 1 && resources.belief > 150 && resources.science > 20) { era = 1; updateBuildMenu(); log('Nová éra: Doba kamenná!'); playSound(700, 0.3); }
+  if (era < 2 && resources.belief > 300 && resources.science > 60 && resources.iron > 20) { era = 2; updateBuildMenu(); log('Nová éra: Doba bronzová!'); playSound(800, 0.4); }
   resources.happiness = Math.max(10, Math.min(100, resources.happiness));
   dayTime = (dayTime + 1) % 120;
   const wt2 = weatherTypes[weather];
