@@ -851,6 +851,8 @@ function loadGame(slot) {
     addNature();
     spawnSettlers();
     spawnAnimals();
+    document.getElementById('upgrade-menu').style.display = 'none';
+    document.getElementById('info-panel').style.display = 'none';
     updateBuildMenu();
     updateUI();
     log('Načítané zo slotu ' + slot);
