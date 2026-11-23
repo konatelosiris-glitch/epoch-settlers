@@ -99,10 +99,10 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0a0a1a; c
     <div id="modes">
       <button class="mode-btn selected" data-mode="build">🏗️</button>
       <button class="mode-btn" data-mode="road">🛣️</button>
-      <button class="mode-btn" data-mode="sculpt-up">⬆️</button>
-      <button class="mode-btn" data-mode="sculpt-down">⬇️</button>
+      <button class="mode-btn" data-mode="sculpt-up" title="Zvýšiť terén">⛰️+</button>
+      <button class="mode-btn" data-mode="sculpt-down" title="Znížiť terén">⛰️−</button>
       <button class="mode-btn" data-mode="mine">⛏️</button>
-      <button class="mode-btn" data-mode="upgrade">⬆️</button>
+      <button class="mode-btn" data-mode="upgrade" title="Vylepšiť budovu">⬆️</button>
       <button class="mode-btn" data-mode="info">ℹ️</button>
       <button class="mode-btn" data-mode="center">🎯</button>
       <button class="trade-btn" id="btn-trade">💰</button>
@@ -110,6 +110,7 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0a0a1a; c
       <button class="save-btn" id="btn-load1">📂1</button>
       <button class="save-btn" id="btn-save2">💾2</button>
       <button class="save-btn" id="btn-load2">📂2</button>
+      <button class="save-btn" id="btn-loadauto" title="Načítať automatické uloženie">📂Auto</button>
     </div>
     <div id="build-menu"></div>
     <div id="upgrade-menu" style="display:none;"></div>
@@ -323,6 +324,45 @@ function syncTileHeight(x, y, h0) {
   rocks.forEach(r => { if (r.x === x && r.y === y) r.mesh.position.y += dy; });
   if (roadTiles.has(x + ',' + y)) createRoads();
 }
+const TREE_TYPES = {
+  dub: { leafColor: 0x2e7d32, trunkH: 1.2, leafR: 0.6 },
+  borovica: { leafColor: 0x1b5e20, trunkH: 1.8, leafR: 0.4 },
+  breza: { leafColor: 0x66bb6a, trunkH: 1.0, leafR: 0.5 }
+};
+// Build (and add to the scene) the mesh for a tree record {x, y, age, a0, type, planted}.
+function makeTreeMesh(t) {
+  const baseY = terrainHeights[t.y][t.x] * 0.5;
+  let trunk, leaves;
+  if (t.planted) {
+    trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.4, 4), new THREE.MeshLambertMaterial({ color: 0x5d4037 }));
+    leaves = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.4, 5), new THREE.MeshLambertMaterial({ color: 0x4caf50 }));
+    trunk.position.set(t.x*TILE, baseY + 0.25, t.y*TILE);
+    leaves.position.set(t.x*TILE, baseY + 0.55, t.y*TILE);
+  } else {
+    const type = TREE_TYPES[t.type] || TREE_TYPES.dub, a = t.a0 || t.age;
+    trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.1*a, 0.14*a, type.trunkH*a, 5), new THREE.MeshLambertMaterial({ color: t.type === 'breza' ? 0xe0e0e0 : 0x5d4037 }));
+    leaves = new THREE.Mesh(new THREE.ConeGeometry(type.leafR*a, type.trunkH*0.8*a, 6), new THREE.MeshLambertMaterial({ color: type.leafColor }));
+    trunk.position.set(t.x*TILE, baseY + type.trunkH*a/2, t.y*TILE);
+    leaves.position.set(t.x*TILE, baseY + type.trunkH*a + 0.2, t.y*TILE);
+  }
+  if (t.a0 !== undefined && t.age !== t.a0) { trunk.scale.set(1, t.age, 1); leaves.scale.set(t.age, t.age, t.age); }
+  natureGroup.add(trunk, leaves);
+  return { trunk, leaves };
+}
+function makeRockMesh(r) {
+  const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(r.r || 0.26, 0), new THREE.MeshLambertMaterial({ color: 0x78909c }));
+  rock.position.set(r.x*TILE, terrainHeights[r.y][r.x]*0.5 + 0.15, r.y*TILE);
+  natureGroup.add(rock);
+  return rock;
+}
+// Restore saved trees/rocks; returns false for old saves without nature data.
+function restoreNature(data) {
+  if (!Array.isArray(data.trees)) return false;
+  while (natureGroup.children.length) natureGroup.remove(natureGroup.children[0]);
+  trees = data.trees.map(t => { const n = { ...t }; n.mesh = makeTreeMesh(n); return n; });
+  rocks = (data.rocks || []).map(r => { const n = { ...r }; n.mesh = makeRockMesh(n); return n; });
+  return true;
+}
 function addNature() {
   while (natureGroup.children.length) natureGroup.remove(natureGroup.children[0]);
   trees = [];
@@ -340,17 +380,13 @@ function addNature() {
         const type = treeTypes[Math.floor(Math.random() * treeTypes.length)];
         const age = 0.7 + Math.random() * 0.5;
         const baseY = h * 0.5;
-        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.1*age, 0.14*age, type.trunkH*age, 5), new THREE.MeshLambertMaterial({ color: type.name === 'breza' ? 0xe0e0e0 : 0x5d4037 }));
-        const leaves = new THREE.Mesh(new THREE.ConeGeometry(type.leafR*age, type.trunkH*0.8*age, 6), new THREE.MeshLambertMaterial({ color: type.leafColor }));
-        trunk.position.set(x*TILE, baseY + type.trunkH*age/2, y*TILE);
-        leaves.position.set(x*TILE, baseY + type.trunkH*age + 0.2, y*TILE);
-        natureGroup.add(trunk, leaves);
-        trees.push({ x, y, age, type: type.name, mesh: { trunk, leaves } });
+        const t = { x, y, age, a0: age, type: type.name };
+        t.mesh = makeTreeMesh(t);
+        trees.push(t);
       } else if (h > 1.2 && Math.random() > 0.9) {
-        const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.2 + Math.random()*0.12, 0), new THREE.MeshLambertMaterial({ color: 0x78909c }));
-        rock.position.set(x*TILE, h*0.5 + 0.15, y*TILE);
-        natureGroup.add(rock);
-        rocks.push({ x, y, mesh: rock });
+        const r = { x, y, r: 0.2 + Math.random()*0.12 };
+        r.mesh = makeRockMesh(r);
+        rocks.push(r);
       }
     }
   }
@@ -360,8 +396,7 @@ function spawnAnimals() {
   animals = [];
   const count = isMobile ? 4 : 8;
   for (let i = 0; i < count; i++) {
-    const x = Math.floor(Math.random() * GRID);
-    const y = Math.floor(Math.random() * GRID);
+    const [x, y] = randomLandTile();
     const isDeer = Math.random() > 0.5;
     const body = new THREE.Mesh(
       isDeer ? new THREE.BoxGeometry(0.3, 0.2, 0.5) : new THREE.SphereGeometry(0.12, 4, 3),
@@ -393,6 +428,15 @@ function updateAnimals() {
   });
 }
 // keep=true (used after placing a building): existing settlers keep their position/job; only add/remove the difference.
+// Random walkable land tile (not river), used for spawning settlers and animals.
+function randomLandTile() {
+  for (let i = 0; i < 500; i++) {
+    const x = Math.floor(Math.random() * GRID), y = Math.floor(Math.random() * GRID);
+    if (!riverTiles.has(x + ',' + y)) return [x, y];
+  }
+  for (let y = 0; y < GRID; y++) for (let x = 0; x < GRID; x++) if (!riverTiles.has(x + ',' + y)) return [x, y];
+  return [0, 0];
+}
 function spawnSettlers(keep = false) {
   const count = Math.min(resources.pop, isMobile ? 5 : 10);
   if (keep) {
@@ -404,8 +448,7 @@ function spawnSettlers(keep = false) {
   }
   const colors = [0xffcc80, 0xffab91, 0xbcaaa4, 0x90a4ae, 0x81c784];
   for (let i = settlers.length; i < count; i++) {
-    const x = Math.floor(Math.random() * GRID);
-    const y = Math.floor(Math.random() * GRID);
+    const [x, y] = randomLandTile();
     const body = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.5, 5), new THREE.MeshLambertMaterial({ color: colors[i % colors.length] }));
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.12, 5, 4), new THREE.MeshLambertMaterial({ color: 0xffdbac }));
     const baseY = terrainHeights[y][x] * 0.5;
@@ -477,14 +520,9 @@ function spawnParticle(x, y, color) {
   particles.push({ mesh: p, life: 1.0, vx: (Math.random()-0.5)*0.5, vy: 1.5 + Math.random(), vz: (Math.random()-0.5)*0.5 });
 }
 function plantTree(x, y) {
-  const age = 0.3;
-  const baseY = terrainHeights[y][x] * 0.5;
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.4, 4), new THREE.MeshLambertMaterial({ color: 0x5d4037 }));
-  const leaves = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.4, 5), new THREE.MeshLambertMaterial({ color: 0x4caf50 }));
-  trunk.position.set(x*TILE, baseY + 0.25, y*TILE);
-  leaves.position.set(x*TILE, baseY + 0.55, y*TILE);
-  natureGroup.add(trunk, leaves);
-  trees.push({ x, y, age, type: 'dub', mesh: { trunk, leaves } });
+  const t = { x, y, age: 0.3, a0: 0.3, type: 'dub', planted: true };
+  t.mesh = makeTreeMesh(t);
+  trees.push(t);
   spawnParticle(x, y, 0x4caf50);
   playSound(440, 0.1);
 }
@@ -819,18 +857,22 @@ function updateTradeMenu() {
     menu.appendChild(btn);
   });
 }
-function saveGame(slot) {
+function saveGame(slot, silent = false) {
   const data = {
     resources, buildings, roadTiles: [...roadTiles], riverTiles: [...riverTiles],
-    terrainHeights, seed, era, stats, weather, dayTime, quests
+    terrainHeights, seed, era, stats, weather, dayTime, quests,
+    trees: trees.map(t => ({ x: t.x, y: t.y, age: t.age, a0: t.a0, type: t.type, planted: t.planted })),
+    rocks: rocks.map(r => ({ x: r.x, y: r.y, r: r.r }))
   };
   localStorage.setItem('epochSave' + slot, JSON.stringify(data));
+  if (silent) return;
   log('Uložené do slotu ' + slot);
   playSound(600, 0.15);
 }
 function loadGame(slot) {
   const raw = localStorage.getItem('epochSave' + slot);
-  if (!raw) { log('Slot ' + slot + ' je prázdny'); return; }
+  const slotName = slot === 'Auto' ? 'z automatického uloženia' : 'zo slotu ' + slot;
+  if (!raw) { log(slot === 'Auto' ? 'Automatické uloženie je prázdne' : 'Slot ' + slot + ' je prázdny'); return; }
   try {
     const data = JSON.parse(raw);
     resources = data.resources;
@@ -848,14 +890,14 @@ function loadGame(slot) {
     buildings.forEach(b => createBuilding(b.type, b.x, b.y, b.level || 1));
     createTerrain();
     createRoads();
-    addNature();
+    if (!restoreNature(data)) addNature(); // old saves without tree data: regenerate forest
     spawnSettlers();
     spawnAnimals();
     document.getElementById('upgrade-menu').style.display = 'none';
     document.getElementById('info-panel').style.display = 'none';
     updateBuildMenu();
     updateUI();
-    log('Načítané zo slotu ' + slot);
+    log('Načítané ' + slotName);
     playSound(500, 0.15);
   } catch(e) { log('Chyba načítania'); }
 }
@@ -863,6 +905,7 @@ document.getElementById('btn-save1').onclick = () => saveGame(1);
 document.getElementById('btn-load1').onclick = () => loadGame(1);
 document.getElementById('btn-save2').onclick = () => saveGame(2);
 document.getElementById('btn-load2').onclick = () => loadGame(2);
+document.getElementById('btn-loadauto').onclick = () => loadGame('Auto');
 document.getElementById('btn-trade').onclick = () => {
   const tm = document.getElementById('trade-menu');
   tm.style.display = tm.style.display === 'none' ? 'flex' : 'none';
@@ -1081,7 +1124,7 @@ setInterval(() => {
   updateMinimap();
   updateUI();
 }, 1000);
-setInterval(() => saveGame(1), 120000);
+setInterval(() => { saveGame('Auto', true); log('Automaticky uložené'); }, 120000); // own slot, never overwrites manual slot 1
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
