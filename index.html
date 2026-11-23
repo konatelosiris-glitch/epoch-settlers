@@ -60,12 +60,13 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0a0a1a; c
 }
 #minimap {
   position: absolute; top: 60px; left: 10px;
-  width: 100px; height: 100px;
+  width: 80px; height: 80px;
   background: rgba(0,0,0,0.6); border: 2px solid #e94560;
   border-radius: 8px; pointer-events: none;
 }
 #canvas-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
-canvas { display: block; width: 100% !important; height: 100% !important; }
+#canvas-container canvas { display: block; width: 100% !important; height: 100% !important; }
+#minimap { width: 80px !important; height: 80px !important; }
 #feedback { position: absolute; pointer-events: none; font-size: 16px; font-weight: bold; color: #ffeb3b; text-shadow: 1px 1px 2px #000; z-index: 20; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -565,8 +566,8 @@ function updateSettlers() {
 function updateMinimap() {
   const mm = document.getElementById('minimap');
   const ctx = mm.getContext('2d');
-  const w = mm.width = 100;
-  const h = mm.height = 100;
+  const w = mm.width = 80;
+  const h = mm.height = 80;
   ctx.fillStyle = '#1a1a2e';
   ctx.fillRect(0, 0, w, h);
   const scale = w / GRID;
@@ -606,7 +607,7 @@ function updateQuests() {
     div.textContent = '• ' + q.name + progress;
     list.appendChild(div);
   });
-  if (quests.every(q => q.done)) list.innerHTML = '<div style="color:#4caf50">Všetky úlohy splnené!</div>';
+  if (quests.every(q => q.done)) list.innerHTML = '<div style="color:#4caf50">Všetky Úlohy splnené!</div>';
 }
 function completeQuest(q) {
   log('Úloha splnená: ' + q.name);
@@ -1040,7 +1041,7 @@ updateBuildMenu();
 updateUI();
 updateMinimap();
 animate();
-log('Nové: plynulý terén, minimapa, denný cyklus, zvieratá, úlohy!');
+log('Opravené: minimapa je teraz malá v rohu!');
 </script>
 </body>
 </html>
