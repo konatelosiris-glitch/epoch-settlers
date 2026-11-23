@@ -307,6 +307,13 @@ function createRoads() {
     roadGroup.add(mesh);
   });
 }
+// Remove only the trees/rocks on one tile (used when a road or building is placed there).
+function clearNatureAt(x, y) {
+  trees.filter(t => t.x === x && t.y === y).forEach(t => { if (t.mesh) natureGroup.remove(t.mesh.trunk, t.mesh.leaves); });
+  trees = trees.filter(t => !(t.x === x && t.y === y));
+  rocks.filter(r => r.x === x && r.y === y).forEach(r => natureGroup.remove(r.mesh));
+  rocks = rocks.filter(r => !(r.x === x && r.y === y));
+}
 function addNature() {
   while (natureGroup.children.length) natureGroup.remove(natureGroup.children[0]);
   trees = [];
@@ -710,6 +717,7 @@ function tryAutoRoad(x, y) {
       resources.stone -= 2;
       roadTiles.add(nx + ',' + ny);
       createRoads();
+      clearNatureAt(nx, ny);
       return;
     }
   }
@@ -905,7 +913,7 @@ function handleCanvasTap(e) {
           resources.stone -= 2;
           roadTiles.add(x + ',' + y);
           createRoads();
-          addNature();
+          clearNatureAt(x, y);
           showFeedback(x*TILE, 'Cesta');
           log('Cesta postavená');
           playSound(300, 0.1);
@@ -936,6 +944,7 @@ function handleCanvasTap(e) {
           resources.wood -= cost.wood||0; resources.stone -= cost.stone||0;
           buildings.push({ type: selectedBuilding, x, y, level: 1 });
           createBuilding(selectedBuilding, x, y, 1);
+          clearNatureAt(x, y);
           if (selectedBuilding === 'house') resources.pop += 2;
           tryAutoRoad(x, y);
           spawnSettlers();
