@@ -136,10 +136,25 @@ const waterGroup = new THREE.Group();
 scene.add(waterGroup);
 const settlerGroup = new THREE.Group();
 scene.add(settlerGroup);
-function initRivers() {
-  for (let y = 3; y < GRID - 3; y++) {
-    const x = Math.floor(GRID / 2) + Math.floor(Math.sin(y * 0.3) * 1.5);
-    if (x >= 0 && x < GRID) riverTiles.add(x + ',' + y);
+function noise(x, y) {
+  const n = Math.sin(x * 0.7 + y * 0.3) * Math.cos(y * 0.5 - x * 0.2);
+  return (n + 1) * 0.5;
+}
+function generateProceduralTerrain() {
+  for (let y = 0; y < GRID; y++) {
+    for (let x = 0; x < GRID; x++) {
+      let h = noise(x * 0.15, y * 0.15) * 4;
+      h += noise(x * 0.4, y * 0.4) * 1.5;
+      h += noise(x * 0.8, y * 0.8) * 0.5;
+      terrainHeights[y][x] = Math.max(0, h - 1.2);
+    }
+  }
+  for (let y = 2; y < GRID - 2; y++) {
+    const x = Math.floor(GRID / 2) + Math.floor(Math.sin(y * 0.25) * 2);
+    if (x >= 0 && x < GRID) {
+      riverTiles.add(x + ',' + y);
+      terrainHeights[y][x] = 0;
+    }
   }
 }
 function createTerrain() {
@@ -297,8 +312,8 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     const x = Math.round(p.x / TILE);
     const y = Math.round(p.z / TILE);
     if (x >= 0 && x < GRID && y >= 0 && y < GRID) {
-      if (mode === 'sculpt-up') { terrainHeights[y][x] = Math.min(4, terrainHeights[y][x] + 1); createTerrain(); addNature(); log('Terén zvýšený'); }
-      else if (mode === 'sculpt-down') { terrainHeights[y][x] = Math.max(-2, terrainHeights[y][x] - 1); createTerrain(); addNature(); log('Terén znížený'); }
+      if (mode === 'sculpt-up') { terrainHeights[y][x] = Math.min(6, terrainHeights[y][x] + 1); createTerrain(); addNature(); log('Terén zvýšený'); }
+      else if (mode === 'sculpt-down') { terrainHeights[y][x] = Math.max(-1, terrainHeights[y][x] - 1); createTerrain(); addNature(); log('Terén znížený'); }
       else if (mode === 'mine') {
         resources.stone += 5 + Math.random()*3;
         resources.coal += Math.random() > 0.5 ? 1 : 0;
@@ -352,14 +367,14 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
-initRivers();
+generateProceduralTerrain();
 createTerrain();
 addNature();
 spawnSettlers();
 updateBuildMenu();
 updateUI();
 animate();
-log('Krajšia grafika! Lepšie textúry, stromy a osvetlenie.');
+log('Procedurálny terén vygenerovaný! Kopce, údolie a rieka.');
 </script>
 </body>
 </html>
