@@ -121,6 +121,15 @@ let riverTiles = new Set();
 let roadTiles = new Set();
 let seed = Math.random() * 10000;
 let weather = 'clear';
+let weatherDuration = 30;
+let weatherTimer = 0;
+const weatherTypes = {
+  clear: { name: 'Jasno', icon: '☀️', bg: 0x64b5f6, ambient: 0.6, water: 0, speed: 1, happiness: 0 },
+  rain: { name: 'Dážď', icon: '🌧️', bg: 0x546e7a, ambient: 0.4, water: 0.8, speed: 0.8, happiness: -0.2 },
+  storm: { name: 'Búrka', icon: '⛈️', bg: 0x37474f, ambient: 0.25, water: 1.2, speed: 0.5, happiness: -0.5 },
+  fog: { name: 'Hmla', icon: '🌫️', bg: 0x90a4ae, ambient: 0.35, water: 0.2, speed: 0.7, happiness: -0.1 },
+  snow: { name: 'Sneh', icon: '❄️', bg: 0xb0bec5, ambient: 0.5, water: 0.3, speed: 0.6, happiness: -0.3 }
+};
 let dayTime = 0;
 let animTime = 0;
 let particles = [];
@@ -240,6 +249,9 @@ const settlerGroup = new THREE.Group();
 scene.add(settlerGroup);
 const particleGroup = new THREE.Group();
 scene.add(particleGroup);
+const weatherGroup = new THREE.Group();
+scene.add(weatherGroup);
+let weatherParticles = [];
 function noise(x, y) {
   const n = Math.sin(x * 0.15 + seed) * Math.cos(y * 0.12 + seed * 0.7);
   const n2 = Math.sin(x * 0.35 + seed * 1.3) * Math.cos(y * 0.28 + seed);
@@ -415,7 +427,32 @@ function plantTree(x, y) {
   spawnParticle(x, y, 0x4caf50);
   playSound(440, 0.1);
 }
+function updateWeatherParticles() {
+  if (weather === 'clear') {
+    weatherParticles.forEach(p => weatherGroup.remove(p.mesh));
+    weatherParticles = [];
+    return;
+  }
+  if (weatherParticles.length < (weather === 'storm' ? 40 : 20) && Math.random() > 0.5) {
+    const color = weather === 'snow' ? 0xffffff : 0x90caf9;
+    const size = weather === 'snow' ? 0.06 : 0.03;
+    const p = new THREE.Mesh(new THREE.SphereGeometry(size, 3, 2), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.6 }));
+    p.position.set(Math.random() * GRID * TILE, 15 + Math.random() * 5, Math.random() * GRID * TILE);
+    weatherGroup.add(p);
+    weatherParticles.push({ mesh: p, speed: weather === 'storm' ? 0.4 : 0.2 });
+  }
+  weatherParticles = weatherParticles.filter(wp => {
+    wp.mesh.position.y -= wp.speed;
+    if (weather === 'snow') wp.mesh.position.x += Math.sin(animTime + wp.mesh.position.z) * 0.02;
+    if (wp.mesh.position.y < 0) {
+      weatherGroup.remove(wp.mesh);
+      return false;
+    }
+    return true;
+  });
+}
 function updateSettlers() {
+  const speedMult = weatherTypes[weather].speed;
   settlers.forEach(s => {
     if (Math.random() > 0.91) findWork(s);
     if (s.path && s.path.length > 0) {
@@ -425,7 +462,7 @@ function updateSettlers() {
       const dist = Math.sqrt(dx*dx + dy*dy);
       if (dist < 0.4) s.path.shift();
       else {
-        const speed = s.onRoad ? 0.08 : 0.04;
+        const speed = (s.onRoad ? 0.08 : 0.04) * speedMult;
         s.x += (dx / dist) * speed * 5;
         s.y += (dy / dist) * speed * 5;
       }
@@ -433,7 +470,7 @@ function updateSettlers() {
       const dx = s.targetX - s.x;
       const dy = s.targetY - s.y;
       const dist = Math.sqrt(dx*dx + dy*dy);
-      const speed = (s.onRoad ? 0.06 : 0.03) * (s.job === 'chop' || s.job === 'work' || s.job === 'plant' ? 1.3 : 1);
+      const speed = (s.onRoad ? 0.06 : 0.03) * (s.job === 'chop' || s.job === 'work' || s.job === 'plant' ? 1.3 : 1) * speedMult;
       if (dist > 0.3) {
         s.x += (dx / dist) * speed * 5;
         s.y += (dy / dist) * speed * 5;
@@ -606,7 +643,7 @@ function updateUI() {
     const el = document.getElementById('res-' + k);
     if (el) el.textContent = Math.floor(resources[k] || 0);
   });
-  document.getElementById('era').textContent = 'Éra: ' + eras[era] + ' | ' + (weather === 'rain' ? 'Dážď' : 'Jasno');
+  document.getElementById('era').textContent = 'Éra: ' + eras[era] + ' | ' + weatherTypes[weather].icon + ' ' + weatherTypes[weather].name;
   document.getElementById('stats').textContent = 'Vyrobené: ' + Math.floor(stats.produced) + ' | Max: ' + stats.maxPop + ' | ' + Math.floor(stats.time/60) + 'm';
 }
 function log(msg) { document.getElementById('log').textContent = msg; }
@@ -818,6 +855,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
 function animate() {
   requestAnimationFrame(animate);
   animTime += 0.016;
+  updateWeatherParticles();
   updateSettlers();
   buildingGroup.children.forEach(group => {
     group.children.forEach(child => {
@@ -880,9 +918,18 @@ setInterval(() => {
     resources.bread -= 0.3;
     resources.happiness += 0.3;
   }
-  if (weather === 'rain') {
-    resources.water += 0.5;
-    if (Math.random() > 0.7) playSound(800 + Math.random()*200, 0.05, 'sine');
+  const wt = weatherTypes[weather];
+  resources.water += wt.water;
+  resources.happiness += wt.happiness;
+  if ((weather === 'rain' || weather === 'storm') && Math.random() > 0.6) playSound(800 + Math.random()*200, 0.05, 'sine');
+  if (weather === 'storm' && Math.random() > 0.85) playSound(80, 0.3, 'sawtooth');
+  weatherTimer++;
+  if (weatherTimer >= weatherDuration) {
+    const keys = Object.keys(weatherTypes);
+    weather = keys[Math.floor(Math.random() * keys.length)];
+    weatherTimer = 0;
+    weatherDuration = 20 + Math.floor(Math.random() * 40);
+    log('Počasie: ' + weatherTypes[weather].name);
   }
   resources.belief += resources.pop * 0.005;
   resources.science += buildings.filter(b => b.type === 'church').length * 0.1;
@@ -892,14 +939,14 @@ setInterval(() => {
   if (era < 2 && resources.belief > 300 && resources.science > 60 && resources.iron > 20) { era = 2; log('Nová éra: Doba bronzová!'); playSound(800, 0.4); }
   resources.happiness = Math.max(10, Math.min(100, resources.happiness));
   dayTime = (dayTime + 1) % 120;
+  const wt2 = weatherTypes[weather];
   if (dayTime < 20 || dayTime > 100) {
     scene.background = new THREE.Color(0x1a237e);
-    ambient.intensity = 0.35;
+    ambient.intensity = wt2.ambient * 0.5;
   } else {
-    scene.background = new THREE.Color(0x64b5f6);
-    ambient.intensity = 0.6;
+    scene.background = new THREE.Color(wt2.bg);
+    ambient.intensity = wt2.ambient;
   }
-  if (Math.random() > 0.97) weather = weather === 'clear' ? 'rain' : 'clear';
   updateUI();
 }, 1000);
 setInterval(() => saveGame(1), 120000);
@@ -915,7 +962,7 @@ spawnSettlers();
 updateBuildMenu();
 updateUI();
 animate();
-log('Vylepšenia: väčší obyvatelia, častice, info panel (ℹ️), zvuky, tiene, komíny!');
+log('Dynamické počasie: Jasno, Dážď, Búrka, Hmla, Sneh!');
 </script>
 </body>
 </html>
