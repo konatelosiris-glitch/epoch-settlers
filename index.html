@@ -117,37 +117,39 @@ let dayTime = 0;
 let animTime = 0;
 function makeTexture(color, type) {
   const c = document.createElement('canvas');
-  c.width = 64; c.height = 64;
+  c.width = 128; c.height = 128;
   const ctx = c.getContext('2d');
   ctx.fillStyle = color;
-  ctx.fillRect(0, 0, 64, 64);
+  ctx.fillRect(0, 0, 128, 128);
   if (type === 'wood') {
     ctx.strokeStyle = '#3e2723';
-    for (let i = 0; i < 8; i++) {
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 16; i++) {
       ctx.beginPath();
       ctx.moveTo(0, i * 8);
-      ctx.lineTo(64, i * 8 + 2);
+      ctx.lineTo(128, i * 8 + 3);
       ctx.stroke();
     }
   } else if (type === 'stone') {
     ctx.fillStyle = '#5d4037';
-    for (let i = 0; i < 6; i++) {
-      for (let j = 0; j < 6; j++) {
-        if (Math.random() > 0.4) ctx.fillRect(i*10+1, j*10+1, 8, 8);
+    for (let i = 0; i < 8; i++) {
+      for (let j = 0; j < 8; j++) {
+        if (Math.random() > 0.35) ctx.fillRect(i*16+1, j*16+1, 14, 14);
       }
     }
   } else if (type === 'roof') {
     ctx.strokeStyle = '#2e1a1a';
-    for (let i = 0; i < 10; i++) {
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 16; i++) {
       ctx.beginPath();
-      ctx.moveTo(0, i * 6);
-      ctx.lineTo(64, i * 6);
+      ctx.moveTo(0, i * 8);
+      ctx.lineTo(128, i * 8);
       ctx.stroke();
     }
   } else if (type === 'grass') {
     ctx.fillStyle = '#388e3c';
-    for (let i = 0; i < 40; i++) {
-      ctx.fillRect(Math.random()*64, Math.random()*64, 2, 3);
+    for (let i = 0; i < 80; i++) {
+      ctx.fillRect(Math.random()*128, Math.random()*128, 3, 4);
     }
   }
   const tex = new THREE.CanvasTexture(c);
@@ -161,7 +163,7 @@ const textures = {
   grass: makeTexture('#4caf50', 'grass'),
   farm: makeTexture('#66bb6a', 'grass'),
   mine: makeTexture('#546e7a', 'stone'),
-  townhall: makeTexture('#5d4037', 'stone')
+  townhall: makeTexture('#6d4c41', 'stone')
 };
 const buildingTypes = {
   townhall: { name: "Radnica", cost: { wood: 20, stone: 15 }, prod: { belief: 2, science: 0.5, gold: 0.3 }, height: 2.8, tex: textures.townhall, era: 0 },
@@ -418,24 +420,49 @@ function showFeedback(worldX, text) {
 function createBuilding(type, x, y, level = 1) {
   const bt = buildingTypes[type];
   const group = new THREE.Group();
-  const height = bt.height * (1 + (level-1) * 0.3);
+  const height = bt.height * (1 + (level-1) * 0.25);
   const bodyMat = new THREE.MeshLambertMaterial({ map: bt.tex });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(TILE*0.65, height, TILE*0.65), bodyMat);
-  body.position.y = height / 2;
-  group.add(body);
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(TILE*0.45, height * 0.4, 4), new THREE.MeshLambertMaterial({ map: textures.roof }));
-  roof.position.y = height + 0.1;
-  roof.rotation.y = Math.PI / 4;
-  group.add(roof);
   if (type === 'townhall') {
-    const flag = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.4, 0.2), new THREE.MeshLambertMaterial({ color: 0xe94560 }));
-    flag.position.set(0, height + 0.5, 0);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(TILE*0.85, height*0.6, TILE*0.85), bodyMat);
+    base.position.y = height*0.3;
+    group.add(base);
+    const mid = new THREE.Mesh(new THREE.BoxGeometry(TILE*0.65, height*0.5, TILE*0.65), bodyMat);
+    mid.position.y = height*0.75;
+    group.add(mid);
+    const top = new THREE.Mesh(new THREE.BoxGeometry(TILE*0.45, height*0.3, TILE*0.45), bodyMat);
+    top.position.y = height*1.1;
+    group.add(top);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(TILE*0.35, height*0.4, 4), new THREE.MeshLambertMaterial({ map: textures.roof }));
+    roof.position.y = height*1.4;
+    roof.rotation.y = Math.PI / 4;
+    group.add(roof);
+    const flag = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.35, 0.18), new THREE.MeshLambertMaterial({ color: 0xe94560 }));
+    flag.position.set(0, height*1.65, 0);
     flag.userData = { type: 'flag' };
     group.add(flag);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.4, 0.05), new THREE.MeshLambertMaterial({ color: 0x3e2723 }));
+    door.position.set(0, 0.25, TILE*0.43);
+    group.add(door);
+    for (let i = 0; i < 3; i++) {
+      const win = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.05), new THREE.MeshLambertMaterial({ color: 0x90caf9 }));
+      win.position.set(-0.2 + i*0.2, height*0.55, TILE*0.43);
+      group.add(win);
+    }
+  } else {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(TILE*0.65, height, TILE*0.65), bodyMat);
+    body.position.y = height / 2;
+    group.add(body);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(TILE*0.45, height * 0.45, 4), new THREE.MeshLambertMaterial({ map: textures.roof }));
+    roof.position.y = height + 0.15;
+    roof.rotation.y = Math.PI / 4;
+    group.add(roof);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.35, 0.05), new THREE.MeshLambertMaterial({ color: 0x3e2723 }));
+    door.position.set(0, 0.2, TILE*0.33);
+    group.add(door);
   }
   if (['mine','bakery','smith','lumber'].includes(type)) {
     const smoke = new THREE.Mesh(new THREE.SphereGeometry(0.15, 4, 3), new THREE.MeshLambertMaterial({ color: 0xaaaaaa, transparent: true, opacity: 0.6 }));
-    smoke.position.y = height + 0.4;
+    smoke.position.y = height + 0.5;
     smoke.userData = { type: 'smoke', offset: Math.random() * Math.PI * 2 };
     group.add(smoke);
   }
@@ -755,7 +782,7 @@ spawnSettlers();
 updateBuildMenu();
 updateUI();
 animate();
-log('Vylepšené textúry budov a väčšia mapa!');
+log('Radnica má teraz detailnejší model (veža, okná, dvere)!');
 </script>
 </body>
 </html>
