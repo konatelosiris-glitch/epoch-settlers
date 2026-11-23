@@ -1,1 +1,180 @@
-FULL_CONTENT_PLACEHOLDER
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0a0a1a">
+<title>Epoch Settlers 3D</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, sans-serif; background: #0a0a1a; color: #eee; overflow: hidden; height: 100dvh; touch-action: none; }
+#ui { position: absolute; top: 0; left: 0; right: 0; pointer-events: none; z-index: 10; }
+#top-bar { background: rgba(22,33,62,0.92); padding: 8px; display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; pointer-events: auto; }
+.resource { background: #0f3460; padding: 4px 8px; border-radius: 10px; }
+.resource span { font-weight: bold; color: #ffd166; }
+#bottom-ui { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(22,33,62,0.96); padding: 8px; max-height: 30vh; overflow-y: auto; pointer-events: auto; }
+.mode-btn, .build-btn, .ctrl { background: #0f3460; border: 1px solid #e94560; color: white; padding: 8px 10px; border-radius: 6px; font-size: 13px; margin: 2px; min-height: 40px; }
+.mode-btn.selected { background: #e94560; }
+#canvas-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; background: #1a3a2a; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+<div id="ui">
+  <div id="top-bar">
+    <div class="resource">🍞 <span id="res-food">80</span></div>
+    <div class="resource">🪵 <span id="res-wood">40</span></div>
+    <div class="resource">🪨 <span id="res-stone">25</span></div>
+    <div class="resource">👥 <span id="res-pop">6</span></div>
+    <div class="resource">🙏 <span id="res-belief">30</span></div>
+    <div class="resource">🔬 <span id="res-science">0</span></div>
+  </div>
+  <div id="bottom-ui">
+    <div id="modes">
+      <button class="mode-btn selected" data-mode="build">🏗️ Stavanie</button>
+      <button class="mode-btn" data-mode="sculpt-up">⬆️ Zvýšiť</button>
+      <button class="mode-btn" data-mode="sculpt-down">⬇️ Znížiť</button>
+    </div>
+    <div id="build-menu"></div>
+    <div id="log"></div>
+    <button class="ctrl" id="btn-save">💾 Uložiť</button>
+  </div>
+</div>
+<div id="canvas-container"></div>
+<script>
+const GRID = 16, TILE = 2;
+let mode = 'build', selectedBuilding = 'hut';
+let resources = { food: 80, wood: 40, stone: 25, pop: 6, belief: 30, science: 0 };
+let terrainHeights = Array.from({length: GRID}, () => Array(GRID).fill(0));
+let buildings = [];
+const buildingTypes = {
+  hut: { name: "Chata", cost: { wood: 10, stone: 5 }, prod: { food: 1 }, height: 1, color: 0x8d6e63 },
+  farm: { name: "Farma", cost: { wood: 12, stone: 6 }, prod: { food: 3 }, height: 1, color: 0x4caf50 },
+  house: { name: "Dom", cost: { wood: 15, stone: 10 }, prod: { pop: 2 }, height: 1.5, color: 0xffcc80 }
+};
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a3a2a);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
+camera.position.set(GRID*TILE/2, 15, GRID*TILE/2 + 10);
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "low-power" });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+document.getElementById('canvas-container').appendChild(renderer.domElement);
+const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambient);
+const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+sun.position.set(10, 20, 10);
+scene.add(sun);
+const terrainGroup = new THREE.Group();
+scene.add(terrainGroup);
+const buildingGroup = new THREE.Group();
+scene.add(buildingGroup);
+function createTerrain() {
+  terrainGroup.clear();
+  const geo = new THREE.BoxGeometry(TILE, 0.4, TILE);
+  const mat = new THREE.MeshStandardMaterial({ color: 0x4caf50, roughness: 0.8 });
+  const inst = new THREE.InstancedMesh(geo, mat, GRID*GRID);
+  const dummy = new THREE.Object3D();
+  let i = 0;
+  for (let y = 0; y < GRID; y++) for (let x = 0; x < GRID; x++) {
+    const h = terrainHeights[y][x];
+    dummy.position.set(x*TILE, 0.2 + Math.abs(h)*0.3, y*TILE);
+    dummy.scale.y = 1 + Math.abs(h)*0.5;
+    dummy.updateMatrix();
+    inst.setMatrixAt(i++, dummy.matrix);
+  }
+  inst.instanceMatrix.needsUpdate = true;
+  terrainGroup.add(inst);
+}
+function createBuilding(type, x, y) {
+  const bt = buildingTypes[type];
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(TILE*0.7, bt.height, TILE*0.7), new THREE.MeshStandardMaterial({ color: bt.color }));
+  mesh.position.set(x*TILE, bt.height/2, y*TILE);
+  mesh.userData = { type, x, y };
+  buildingGroup.add(mesh);
+  return mesh;
+}
+function updateUI() {
+  document.getElementById('res-food').textContent = Math.floor(resources.food);
+  document.getElementById('res-wood').textContent = Math.floor(resources.wood);
+  document.getElementById('res-stone').textContent = Math.floor(resources.stone);
+  document.getElementById('res-pop').textContent = resources.pop;
+  document.getElementById('res-belief').textContent = Math.floor(resources.belief);
+  document.getElementById('res-science').textContent = Math.floor(resources.science);
+}
+function log(msg) { document.getElementById('log').textContent = msg; }
+function updateBuildMenu() {
+  const menu = document.getElementById('build-menu');
+  menu.innerHTML = '';
+  Object.entries(buildingTypes).forEach(([k, v]) => {
+    const btn = document.createElement('button');
+    btn.className = 'build-btn' + (selectedBuilding === k ? ' selected' : '');
+    btn.textContent = v.name;
+    btn.onclick = () => { selectedBuilding = k; updateBuildMenu(); };
+    menu.appendChild(btn);
+  });
+}
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    mode = btn.dataset.mode;
+  };
+});
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse.x = (e.clientX - rect.left) / rect.width * 2 - 1;
+  mouse.y = -(e.clientY - rect.top) / rect.height * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObjects(terrainGroup.children, true);
+  if (intersects.length) {
+    const p = intersects[0].point;
+    const x = Math.round(p.x / TILE);
+    const y = Math.round(p.z / TILE);
+    if (x >= 0 && x < GRID && y >= 0 && y < GRID) {
+      if (mode === 'sculpt-up') { terrainHeights[y][x] += 1; createTerrain(); log('Terén zvýšený'); }
+      else if (mode === 'sculpt-down') { terrainHeights[y][x] -= 1; createTerrain(); log('Terén znížený'); }
+      else if (mode === 'build' && selectedBuilding) {
+        const cost = buildingTypes[selectedBuilding].cost;
+        if (resources.wood >= (cost.wood||0) && resources.stone >= (cost.stone||0)) {
+          resources.wood -= cost.wood||0; resources.stone -= cost.stone||0;
+          buildings.push({ type: selectedBuilding, x, y });
+          createBuilding(selectedBuilding, x, y);
+          log('Postavené: ' + buildingTypes[selectedBuilding].name);
+          updateUI();
+        } else log('Nedostatok zdrojov');
+      }
+    }
+  }
+});
+function animate() {
+  requestAnimationFrame(animate);
+  camera.lookAt(GRID*TILE/2, 0, GRID*TILE/2);
+  renderer.render(scene, camera);
+}
+setInterval(() => {
+  buildings.forEach(b => {
+    const prod = buildingTypes[b.type].prod;
+    if (prod) Object.entries(prod).forEach(([k,v]) => resources[k] = (resources[k]||0) + v);
+  });
+  resources.belief += resources.pop * 0.05;
+  resources.science += resources.pop * 0.02;
+  if (resources.food > resources.pop) resources.food -= resources.pop * 0.1;
+  updateUI();
+}, 1000);
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+createTerrain();
+updateBuildMenu();
+updateUI();
+animate();
+log('3D Epoch Settlers pripravený! Sculptuj a stavaj.');
+</script>
+</body>
+</html>
