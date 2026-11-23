@@ -345,9 +345,20 @@ function makeTreeMesh(t) {
     trunk.position.set(t.x*TILE, baseY + type.trunkH*a/2, t.y*TILE);
     leaves.position.set(t.x*TILE, baseY + type.trunkH*a + 0.2, t.y*TILE);
   }
-  if (t.a0 !== undefined && t.age !== t.a0) { trunk.scale.set(1, t.age, 1); leaves.scale.set(t.age, t.age, t.age); }
   natureGroup.add(trunk, leaves);
-  return { trunk, leaves };
+  // offsets above ground at the size the geometry was built for; growth scales around the ground point
+  const mesh = { trunk, leaves, trunkOff: trunk.position.y - baseY, leavesOff: leaves.position.y - baseY };
+  applyTreeGrowth(t, mesh);
+  return mesh;
+}
+// Geometry is built for age a0, so growth scales by age/a0 and keeps the trunk on the ground.
+function applyTreeGrowth(t, mesh = t.mesh) {
+  if (!mesh || mesh.trunkOff === undefined) return;
+  const s = t.a0 ? t.age / t.a0 : 1, baseY = terrainHeights[t.y][t.x] * 0.5;
+  mesh.trunk.scale.set(1, s, 1);
+  mesh.leaves.scale.set(s, s, s);
+  mesh.trunk.position.y = baseY + mesh.trunkOff * s;
+  mesh.leaves.position.y = baseY + mesh.leavesOff * s;
 }
 function makeRockMesh(r) {
   const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(r.r || 0.26, 0), new THREE.MeshLambertMaterial({ color: 0x78909c }));
@@ -1076,10 +1087,7 @@ setInterval(() => {
   trees.forEach(t => {
     if (t.age < 1.2 && Math.random() > 0.88) {
       t.age += 0.008;
-      if (t.mesh) {
-        t.mesh.trunk.scale.set(1, t.age, 1);
-        t.mesh.leaves.scale.set(t.age, t.age, t.age);
-      }
+      applyTreeGrowth(t);
     }
   });
   const foodNeed = resources.pop * 0.04;
