@@ -713,7 +713,7 @@ function createBuilding(type, x, y, level = 1) {
 function tryAutoRoad(x, y) {
   const neighbors = [[x+1,y],[x-1,y],[x,y+1],[x,y-1]];
   for (const [nx, ny] of neighbors) {
-    if (nx >= 0 && nx < GRID && ny >= 0 && ny < GRID && !riverTiles.has(nx+','+ny) && !roadTiles.has(nx+','+ny) && resources.stone >= 2) {
+    if (nx >= 0 && nx < GRID && ny >= 0 && ny < GRID && !riverTiles.has(nx+','+ny) && !roadTiles.has(nx+','+ny) && !buildings.some(b => b.x===nx && b.y===ny) && resources.stone >= 2) {
       resources.stone -= 2;
       roadTiles.add(nx + ',' + ny);
       createRoads();
@@ -908,6 +908,7 @@ function handleCanvasTap(e) {
         }
         return;
       }
+      if (mode === 'road' && buildings.some(b => b.x===x && b.y===y)) { log('Tu stojí budova'); return; }
       if (mode === 'road' && !riverTiles.has(x+','+y) && !roadTiles.has(x+','+y)) {
         if (resources.stone >= 2) {
           resources.stone -= 2;
