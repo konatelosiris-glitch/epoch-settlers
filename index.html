@@ -32,7 +32,7 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0a0a1a; c
   border-top: 1px solid #e94560;
 }
 #modes { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 4px; }
-.mode-btn, .build-btn, .save-btn, .trade-btn { 
+.mode-btn, .build-btn, .save-btn, .trade-btn, .upgrade-btn { 
   background: #0f3460; border: 1px solid #e94560; color: white; 
   padding: 6px 8px; border-radius: 6px; font-size: 11px; 
   margin: 1px; min-height: 32px; min-width: 48px;
@@ -41,7 +41,8 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0a0a1a; c
 .mode-btn.selected, .build-btn.selected { background: #e94560; }
 .save-btn { background: #1b5e20; border-color: #4caf50; font-size: 10px; padding: 5px 6px; }
 .trade-btn { background: #4a148c; border-color: #9c27b0; font-size: 10px; }
-#build-menu, #trade-menu { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 4px; }
+.upgrade-btn { background: #f57c00; border-color: #ff9800; font-weight: bold; }
+#build-menu, #trade-menu, #upgrade-menu { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 4px; }
 #log { font-size: 11px; color: #a8dadc; margin: 2px 0; min-height: 14px; text-align: center; }
 #era { font-size: 12px; color: #ffd166; text-align: center; margin: 2px 0; font-weight: bold; }
 #stats { font-size: 10px; color: #90a4ae; text-align: center; margin: 1px 0; }
@@ -79,6 +80,7 @@ canvas { display: block; width: 100% !important; height: 100% !important; }
       <button class="mode-btn" data-mode="sculpt-up">⬆️</button>
       <button class="mode-btn" data-mode="sculpt-down">⬇️</button>
       <button class="mode-btn" data-mode="mine">⛏️</button>
+      <button class="mode-btn" data-mode="upgrade">⬆️</button>
       <button class="mode-btn" data-mode="center">🎯</button>
       <button class="trade-btn" id="btn-trade">💰</button>
       <button class="save-btn" id="btn-save1">💾1</button>
@@ -87,6 +89,7 @@ canvas { display: block; width: 100% !important; height: 100% !important; }
       <button class="save-btn" id="btn-load2">📂2</button>
     </div>
     <div id="build-menu"></div>
+    <div id="upgrade-menu" style="display:none;"></div>
     <div id="trade-menu" style="display:none;"></div>
     <div id="log"></div>
   </div>
@@ -168,16 +171,18 @@ function noise(x, y) {
 function generateTerrain() {
   for (let y = 0; y < GRID; y++) {
     for (let x = 0; x < GRID; x++) {
-      let h = noise(x * 0.07, y * 0.07) * 6.5;
-      h += noise(x * 0.18, y * 0.18) * 2.2;
-      terrainHeights[y][x] = Math.max(0, h - 1.6);
+      let h = noise(x * 0.05, y * 0.05) * 8;
+      h += noise(x * 0.15, y * 0.15) * 3;
+      h += noise(x * 0.4, y * 0.4) * 1.2;
+      terrainHeights[y][x] = Math.max(0, h - 2.5);
     }
   }
   for (let y = 2; y < GRID - 2; y++) {
-    const x = Math.floor(GRID / 2) + Math.floor(Math.sin(y * 0.12 + seed) * 4);
+    const x = Math.floor(GRID / 2) + Math.floor(Math.sin(y * 0.1 + seed) * 5);
     if (x >= 0 && x < GRID) {
       riverTiles.add(x + ',' + y);
       terrainHeights[y][x] = 0;
+      if (x+1 < GRID) { riverTiles.add((x+1) + ',' + y); terrainHeights[y][x+1] = 0; }
     }
   }
 }
@@ -187,12 +192,16 @@ function createTerrain() {
   const matGrass = new THREE.MeshLambertMaterial({ color: 0x4caf50 });
   const matWater = new THREE.MeshLambertMaterial({ color: 0x2196f3 });
   const matMountain = new THREE.MeshLambertMaterial({ color: 0x8d6e63 });
+  const matValley = new THREE.MeshLambertMaterial({ color: 0x81c784 });
   for (let y = 0; y < GRID; y++) {
     for (let x = 0; x < GRID; x++) {
       const isRiver = riverTiles.has(x + ',' + y);
       const h = terrainHeights[y][x];
-      const height = isRiver ? 0.1 : 0.4 + h * 0.35;
-      const mat = isRiver ? matWater : (h > 2.8 ? matMountain : matGrass);
+      const height = isRiver ? 0.1 : 0.4 + h * 0.45;
+      let mat = matGrass;
+      if (isRiver) mat = matWater;
+      else if (h > 3.5) mat = matMountain;
+      else if (h < 0.8) mat = matValley;
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(x*TILE, height/2, y*TILE);
       mesh.scale.y = height;
@@ -219,7 +228,7 @@ function addNature() {
     for (let x = 0; x < GRID; x++) {
       if (riverTiles.has(x + ',' + y) || roadTiles.has(x + ',' + y) || buildings.some(b => b.x === x && b.y === y)) continue;
       const h = terrainHeights[y][x];
-      if (h < 2.8 && Math.random() > 0.76) {
+      if (h < 3.5 && Math.random() > 0.76) {
         const age = 0.7 + Math.random() * 0.7;
         const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.14*age, 0.2*age, 1.5*age, 5), new THREE.MeshLambertMaterial({ color: 0x5d4037 }));
         const leaves = new THREE.Mesh(new THREE.SphereGeometry(0.75*age, 6, 5), new THREE.MeshLambertMaterial({ color: 0x2e7d32 }));
@@ -227,7 +236,7 @@ function addNature() {
         leaves.position.set(x*TILE, 1.7*age, y*TILE);
         natureGroup.add(trunk, leaves);
         trees.push({ x, y, age, mesh: { trunk, leaves } });
-      } else if (h > 1.5 && Math.random() > 0.88) {
+      } else if (h > 2 && Math.random() > 0.85) {
         const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.3 + Math.random()*0.2, 0), new THREE.MeshLambertMaterial({ color: 0x78909c }));
         rock.position.set(x*TILE, 0.25, y*TILE);
         natureGroup.add(rock);
@@ -358,25 +367,26 @@ function showFeedback(worldX, text) {
   fb.style.opacity = '1';
   setTimeout(() => fb.style.opacity = '0', 800);
 }
-function createBuilding(type, x, y) {
+function createBuilding(type, x, y, level = 1) {
   const bt = buildingTypes[type];
   const group = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.BoxGeometry(TILE*0.65, bt.height, TILE*0.65), new THREE.MeshLambertMaterial({ color: bt.color }));
-  body.position.y = bt.height / 2;
+  const height = bt.height * (1 + (level-1) * 0.3);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(TILE*0.65, height, TILE*0.65), new THREE.MeshLambertMaterial({ color: bt.color }));
+  body.position.y = height / 2;
   group.add(body);
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(TILE*0.45, bt.height * 0.4, 4), new THREE.MeshLambertMaterial({ color: 0x3e2723 }));
-  roof.position.y = bt.height + 0.1;
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(TILE*0.45, height * 0.4, 4), new THREE.MeshLambertMaterial({ color: 0x3e2723 }));
+  roof.position.y = height + 0.1;
   roof.rotation.y = Math.PI / 4;
   group.add(roof);
   if (type === 'townhall') {
     const flag = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.4, 0.2), new THREE.MeshLambertMaterial({ color: 0xe94560 }));
-    flag.position.set(0, bt.height + 0.5, 0);
+    flag.position.set(0, height + 0.5, 0);
     flag.userData = { type: 'flag' };
     group.add(flag);
   }
   if (['mine','bakery','smith','lumber'].includes(type)) {
     const smoke = new THREE.Mesh(new THREE.SphereGeometry(0.15, 4, 3), new THREE.MeshLambertMaterial({ color: 0xaaaaaa, transparent: true, opacity: 0.6 }));
-    smoke.position.y = bt.height + 0.4;
+    smoke.position.y = height + 0.4;
     smoke.userData = { type: 'smoke', offset: Math.random() * Math.PI * 2 };
     group.add(smoke);
   }
@@ -387,7 +397,7 @@ function createBuilding(type, x, y) {
     group.add(crop);
   }
   group.position.set(x*TILE, Math.max(0, terrainHeights[y][x]*0.3), y*TILE);
-  group.userData = { type, x, y };
+  group.userData = { type, x, y, level };
   buildingGroup.add(group);
 }
 function tryAutoRoad(x, y) {
@@ -421,6 +431,32 @@ function updateBuildMenu() {
     btn.onclick = () => { selectedBuilding = k; updateBuildMenu(); };
     menu.appendChild(btn);
   });
+}
+function showUpgradeMenu(building) {
+  const menu = document.getElementById('upgrade-menu');
+  menu.innerHTML = '';
+  menu.style.display = 'flex';
+  const level = building.level || 1;
+  const costWood = 15 * level;
+  const costStone = 12 * level;
+  const btn = document.createElement('button');
+  btn.className = 'upgrade-btn';
+  btn.textContent = 'Upgrade Radnice na úroveň ' + (level+1) + ' (' + costWood + '🪵 ' + costStone + '🪨)';
+  btn.onclick = () => {
+    if (resources.wood >= costWood && resources.stone >= costStone) {
+      resources.wood -= costWood;
+      resources.stone -= costStone;
+      building.level = level + 1;
+      while (buildingGroup.children.length) buildingGroup.remove(buildingGroup.children[0]);
+      buildings.forEach(b => createBuilding(b.type, b.x, b.y, b.level || 1));
+      log('Radnica vylepšená na úroveň ' + building.level + '!');
+      updateUI();
+      menu.style.display = 'none';
+    } else {
+      log('Nedostatok zdrojov na upgrade');
+    }
+  };
+  menu.appendChild(btn);
 }
 function updateTradeMenu() {
   const menu = document.getElementById('trade-menu');
@@ -475,7 +511,7 @@ function loadGame(slot) {
     weather = data.weather || 'clear';
     dayTime = data.dayTime || 0;
     while (buildingGroup.children.length) buildingGroup.remove(buildingGroup.children[0]);
-    buildings.forEach(b => createBuilding(b.type, b.x, b.y));
+    buildings.forEach(b => createBuilding(b.type, b.x, b.y, b.level || 1));
     createTerrain();
     createRoads();
     addNature();
@@ -499,6 +535,7 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
     document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('selected'));
     btn.classList.add('selected');
     mode = btn.dataset.mode;
+    document.getElementById('upgrade-menu').style.display = 'none';
     if (mode === 'center') {
       controls.target.set(GRID*TILE/2, 0, GRID*TILE/2);
       camera.position.set(GRID*TILE/2, 22, GRID*TILE/2 + 16);
@@ -518,6 +555,16 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     const x = Math.round(p.x / TILE);
     const y = Math.round(p.z / TILE);
     if (x >= 0 && x < GRID && y >= 0 && y < GRID) {
+      if (mode === 'upgrade') {
+        const th = buildings.find(b => b.type === 'townhall' && b.x === x && b.y === y);
+        if (th) {
+          showUpgradeMenu(th);
+          log('Klikni na tlačidlo upgrade');
+        } else {
+          log('Klikni na radnicu');
+        }
+        return;
+      }
       if (mode === 'road' && !riverTiles.has(x+','+y) && !roadTiles.has(x+','+y)) {
         if (resources.stone >= 2) {
           resources.stone -= 2;
@@ -549,8 +596,8 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
         const cost = bt.cost;
         if (resources.wood >= (cost.wood||0) && resources.stone >= (cost.stone||0)) {
           resources.wood -= cost.wood||0; resources.stone -= cost.stone||0;
-          buildings.push({ type: selectedBuilding, x, y });
-          createBuilding(selectedBuilding, x, y);
+          buildings.push({ type: selectedBuilding, x, y, level: 1 });
+          createBuilding(selectedBuilding, x, y, 1);
           if (selectedBuilding === 'house') resources.pop += 2;
           tryAutoRoad(x, y);
           spawnSettlers();
@@ -588,6 +635,7 @@ setInterval(() => {
   stats.time++;
   buildings.forEach(b => {
     const bt = buildingTypes[b.type];
+    const levelMult = b.level || 1;
     if (bt.consume) {
       let canProduce = true;
       for (const [k, v] of Object.entries(bt.consume)) {
@@ -596,14 +644,14 @@ setInterval(() => {
       if (canProduce) {
         for (const [k, v] of Object.entries(bt.consume)) resources[k] -= v * 0.2;
         if (bt.prod) for (const [k, v] of Object.entries(bt.prod)) {
-          resources[k] = (resources[k]||0) + v * 0.25;
-          stats.produced += v * 0.25;
+          resources[k] = (resources[k]||0) + v * 0.25 * levelMult;
+          stats.produced += v * 0.25 * levelMult;
         }
       }
     } else if (bt.prod) {
       for (const [k, v] of Object.entries(bt.prod)) {
-        resources[k] = (resources[k]||0) + v * 0.25;
-        stats.produced += v * 0.25;
+        resources[k] = (resources[k]||0) + v * 0.25 * levelMult;
+        stats.produced += v * 0.25 * levelMult;
       }
     }
   });
@@ -658,7 +706,7 @@ spawnSettlers();
 updateBuildMenu();
 updateUI();
 animate();
-log('Radnica a lesník pridané! Lesník sadí stromy.');
+log('Upgrade radnice: vyber režim ⬆️ a klikni na radnicu. Hory a údolia sú výraznejšie.');
 </script>
 </body>
 </html>
