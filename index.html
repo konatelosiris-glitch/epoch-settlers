@@ -13,8 +13,8 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0a0a1a; c
 #top-bar { background: rgba(22,33,62,0.95); padding: 6px 8px; display: flex; flex-wrap: wrap; gap: 4px; font-size: 11px; pointer-events: auto; }
 .resource { background: #0f3460; padding: 3px 7px; border-radius: 10px; white-space: nowrap; }
 .resource span { font-weight: bold; color: #ffd166; }
-#bottom-ui { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(22,33,62,0.97); padding: 6px 8px 10px; padding-bottom: max(10px, env(safe-area-inset-bottom)); max-height: 34vh; overflow-y: auto; pointer-events: auto; }
-.mode-btn, .build-btn, .ctrl { background: #0f3460; border: 1px solid #e94560; color: white; padding: 7px 9px; border-radius: 6px; font-size: 12px; margin: 2px; min-height: 38px; }
+#bottom-ui { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(22,33,62,0.97); padding: 6px 8px 10px; padding-bottom: max(10px, env(safe-area-inset-bottom)); max-height: 32vh; overflow-y: auto; pointer-events: auto; }
+.mode-btn, .build-btn, .ctrl { background: #0f3460; border: 1px solid #e94560; color: white; padding: 7px 9px; border-radius: 6px; font-size: 12px; margin: 2px; min-height: 36px; }
 .mode-btn.selected, .build-btn.selected { background: #e94560; }
 #canvas-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
 #log { font-size: 12px; color: #a8dadc; margin: 4px 0; min-height: 16px; }
@@ -25,11 +25,11 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0a0a1a; c
 <body>
 <div id="ui">
   <div id="top-bar">
-    <div class="resource">🍞 <span id="res-food">120</span></div>
-    <div class="resource">🪵 <span id="res-wood">80</span></div>
-    <div class="resource">🪨 <span id="res-stone">50</span></div>
+    <div class="resource">🍞 <span id="res-food">150</span></div>
+    <div class="resource">🪵 <span id="res-wood">100</span></div>
+    <div class="resource">🪨 <span id="res-stone">60</span></div>
     <div class="resource">👥 <span id="res-pop">8</span></div>
-    <div class="resource">🙏 <span id="res-belief">40</span></div>
+    <div class="resource">🙏 <span id="res-belief">50</span></div>
     <div class="resource">🔬 <span id="res-science">0</span></div>
   </div>
   <div id="bottom-ui">
@@ -44,62 +44,65 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0a0a1a; c
 </div>
 <div id="canvas-container"></div>
 <script>
-function makeTexture(base, variation = 40, size = 128) {
+const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+function makeTexture(base, variation = 40, size = 64) {
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const ctx = c.getContext('2d');
   ctx.fillStyle = base;
   ctx.fillRect(0, 0, size, size);
-  for (let i = 0; i < variation * 3; i++) {
-    const g = Math.random() * 60 - 30;
-    ctx.fillStyle = `rgba(${g+30},${g+40},${g+10},${0.15 + Math.random()*0.25})`;
-    ctx.fillRect(Math.random()*size, Math.random()*size, 1 + Math.random()*3, 1 + Math.random()*3);
+  for (let i = 0; i < variation * 2; i++) {
+    const g = Math.random() * 50 - 25;
+    ctx.fillStyle = `rgba(${g+30},${g+40},${g+10},${0.12 + Math.random()*0.2})`;
+    ctx.fillRect(Math.random()*size, Math.random()*size, 1 + Math.random()*2, 1 + Math.random()*2);
   }
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(6, 6);
-  tex.anisotropy = 4;
+  tex.repeat.set(5, 5);
   return tex;
 }
-const texGrass = makeTexture('#3e7a32', 50);
-const texWood = makeTexture('#6d4c41', 30);
-const texStone = makeTexture('#607d8b', 40);
-const GRID = 22, TILE = 2;
+const texGrass = makeTexture('#3e7a32', 45);
+const texWood = makeTexture('#6d4c41', 25);
+const texStone = makeTexture('#607d8b', 35);
+const GRID = isMobile ? 18 : 22, TILE = 2;
 let mode = 'build', selectedBuilding = 'hut';
-let resources = { food: 120, wood: 80, stone: 50, pop: 8, belief: 40, science: 0 };
+let resources = { food: 150, wood: 100, stone: 60, pop: 8, belief: 50, science: 0 };
 let terrainHeights = Array.from({length: GRID}, () => Array(GRID).fill(0));
 let buildings = [];
 const buildingTypes = {
-  hut: { name: "Chata", cost: { wood: 8, stone: 4 }, prod: { food: 1.2 }, height: 1.4, color: 0x8d6e63 },
-  farm: { name: "Farma", cost: { wood: 10, stone: 5 }, prod: { food: 4 }, height: 1.1, color: 0x66bb6a },
-  house: { name: "Dom", cost: { wood: 12, stone: 8 }, prod: { pop: 2 }, height: 2.0, color: 0xffcc80 },
-  mine: { name: "Baňa", cost: { wood: 6, stone: 12 }, prod: { stone: 2.5 }, height: 1.6, color: 0x78909c }
+  hut: { name: "Chata", cost: { wood: 6, stone: 3 }, prod: { food: 1.5 }, height: 1.3, color: 0x8d6e63 },
+  farm: { name: "Farma", cost: { wood: 8, stone: 4 }, prod: { food: 4.5 }, height: 1.0, color: 0x66bb6a },
+  house: { name: "Dom", cost: { wood: 10, stone: 6 }, prod: { pop: 2 }, height: 1.8, color: 0xffcc80 },
+  mine: { name: "Baňa", cost: { wood: 5, stone: 10 }, prod: { stone: 3 }, height: 1.5, color: 0x78909c }
 };
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
-scene.fog = new THREE.Fog(0x87ceeb, 35, 110);
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 250);
-camera.position.set(GRID*TILE/2, 20, GRID*TILE/2 + 16);
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+scene.fog = new THREE.Fog(0x87ceeb, 25, isMobile ? 70 : 100);
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 200);
+camera.position.set(GRID*TILE/2, 16, GRID*TILE/2 + 12);
+const renderer = new THREE.WebGLRenderer({ 
+  antialias: !isMobile, 
+  powerPreference: isMobile ? "low-power" : "high-performance" 
+});
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.7));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.3 : 1.8));
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.BasicShadowMap;
 document.getElementById('canvas-container').appendChild(renderer.domElement);
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.target.set(GRID*TILE/2, 0, GRID*TILE/2);
 controls.enableDamping = true;
 controls.maxPolarAngle = Math.PI / 2.05;
-controls.minDistance = 8;
-controls.maxDistance = 50;
-const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+controls.minDistance = 6;
+controls.maxDistance = 40;
+const ambient = new THREE.AmbientLight(0xffffff, 0.55);
 scene.add(ambient);
-const hemi = new THREE.HemisphereLight(0x87ceeb, 0x3a5f0b, 0.5);
+const hemi = new THREE.HemisphereLight(0x87ceeb, 0x3a5f0b, 0.45);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xfff5e1, 1.05);
-sun.position.set(25, 35, 18);
+const sun = new THREE.DirectionalLight(0xfff5e1, 0.95);
+sun.position.set(20, 30, 15);
 sun.castShadow = true;
-sun.shadow.mapSize.set(1024, 1024);
+sun.shadow.mapSize.set(isMobile ? 512 : 1024, isMobile ? 512 : 1024);
 scene.add(sun);
 const terrainGroup = new THREE.Group();
 scene.add(terrainGroup);
@@ -109,15 +112,15 @@ const natureGroup = new THREE.Group();
 scene.add(natureGroup);
 function createTerrain() {
   terrainGroup.clear();
-  const geo = new THREE.BoxGeometry(TILE, 0.45, TILE);
-  const mat = new THREE.MeshStandardMaterial({ map: texGrass, roughness: 0.82, metalness: 0.02 });
+  const geo = new THREE.BoxGeometry(TILE, 0.4, TILE);
+  const mat = new THREE.MeshStandardMaterial({ map: texGrass, roughness: 0.8, metalness: 0.01 });
   const inst = new THREE.InstancedMesh(geo, mat, GRID*GRID);
   inst.receiveShadow = true;
   const dummy = new THREE.Object3D();
   let i = 0;
   for (let y = 0; y < GRID; y++) for (let x = 0; x < GRID; x++) {
     const h = terrainHeights[y][x];
-    const height = 0.45 + Math.abs(h) * 0.4;
+    const height = 0.4 + Math.abs(h) * 0.35;
     dummy.position.set(x*TILE, height/2, y*TILE);
     dummy.scale.y = height;
     dummy.updateMatrix();
@@ -128,34 +131,35 @@ function createTerrain() {
 }
 function addNature() {
   natureGroup.clear();
-  for (let i = 0; i < 45; i++) {
+  const count = isMobile ? 28 : 40;
+  for (let i = 0; i < count; i++) {
     const x = Math.floor(Math.random() * GRID);
     const y = Math.floor(Math.random() * GRID);
     if (buildings.some(b => Math.abs(b.x - x) < 1 && Math.abs(b.y - y) < 1)) continue;
-    const h = Math.max(0, terrainHeights[y][x] * 0.35);
-    const scale = 0.8 + Math.random() * 0.6;
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.15*scale, 0.22*scale, 1.4*scale, 6), new THREE.MeshStandardMaterial({ map: texWood, roughness: 0.9 }));
-    const leaves = new THREE.Mesh(new THREE.SphereGeometry(0.85*scale, 8, 6), new THREE.MeshStandardMaterial({ color: 0x2e7d32, roughness: 0.6 }));
-    trunk.position.set(x*TILE, h + 0.7*scale, y*TILE);
-    leaves.position.set(x*TILE, h + 1.7*scale, y*TILE);
-    trunk.castShadow = leaves.castShadow = true;
+    const h = Math.max(0, terrainHeights[y][x] * 0.3);
+    const scale = 0.7 + Math.random() * 0.5;
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12*scale, 0.18*scale, 1.2*scale, 5), new THREE.MeshStandardMaterial({ map: texWood, roughness: 0.85 }));
+    const leaves = new THREE.Mesh(new THREE.SphereGeometry(0.7*scale, 6, 5), new THREE.MeshStandardMaterial({ color: 0x2e7d32, roughness: 0.55 }));
+    trunk.position.set(x*TILE, h + 0.6*scale, y*TILE);
+    leaves.position.set(x*TILE, h + 1.45*scale, y*TILE);
+    trunk.castShadow = leaves.castShadow = !isMobile;
     natureGroup.add(trunk, leaves);
   }
 }
 function createBuilding(type, x, y) {
   const bt = buildingTypes[type];
   const group = new THREE.Group();
-  const bodyMat = new THREE.MeshStandardMaterial({ map: type === 'mine' ? texStone : texWood, color: bt.color, roughness: 0.7 });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(TILE*0.7, bt.height, TILE*0.7), bodyMat);
+  const bodyMat = new THREE.MeshStandardMaterial({ map: type === 'mine' ? texStone : texWood, color: bt.color, roughness: 0.65 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(TILE*0.68, bt.height, TILE*0.68), bodyMat);
   body.position.y = bt.height / 2;
-  body.castShadow = body.receiveShadow = true;
+  body.castShadow = body.receiveShadow = !isMobile;
   group.add(body);
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(TILE*0.52, bt.height * 0.45, 4), new THREE.MeshStandardMaterial({ color: 0x4e342e, roughness: 0.75 }));
-  roof.position.y = bt.height + 0.18;
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(TILE*0.48, bt.height * 0.4, 4), new THREE.MeshStandardMaterial({ color: 0x4e342e, roughness: 0.7 }));
+  roof.position.y = bt.height + 0.15;
   roof.rotation.y = Math.PI / 4;
-  roof.castShadow = true;
+  roof.castShadow = !isMobile;
   group.add(roof);
-  group.position.set(x*TILE, Math.max(0, terrainHeights[y][x]*0.3), y*TILE);
+  group.position.set(x*TILE, Math.max(0, terrainHeights[y][x]*0.25), y*TILE);
   buildingGroup.add(group);
 }
 function updateUI() {
@@ -196,7 +200,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     const x = Math.round(p.x / TILE);
     const y = Math.round(p.z / TILE);
     if (x >= 0 && x < GRID && y >= 0 && y < GRID) {
-      if (mode === 'sculpt-up') { terrainHeights[y][x] = Math.min(5, terrainHeights[y][x] + 1); createTerrain(); addNature(); log('Terén zvýšený'); }
+      if (mode === 'sculpt-up') { terrainHeights[y][x] = Math.min(4, terrainHeights[y][x] + 1); createTerrain(); addNature(); log('Terén zvýšený'); }
       else if (mode === 'sculpt-down') { terrainHeights[y][x] = Math.max(-2, terrainHeights[y][x] - 1); createTerrain(); addNature(); log('Terén znížený'); }
       else if (mode === 'build' && selectedBuilding && !buildings.some(b => b.x===x && b.y===y)) {
         const cost = buildingTypes[selectedBuilding].cost;
@@ -219,13 +223,13 @@ function animate() {
 setInterval(() => {
   buildings.forEach(b => {
     const prod = buildingTypes[b.type].prod;
-    if (prod) Object.entries(prod).forEach(([k,v]) => resources[k] = (resources[k]||0) + v * 0.5);
+    if (prod) Object.entries(prod).forEach(([k,v]) => resources[k] = (resources[k]||0) + v * 0.45);
   });
-  resources.belief += resources.pop * 0.025;
-  resources.science += resources.pop * 0.01;
-  if (resources.food > resources.pop * 0.3) resources.food -= resources.pop * 0.06;
+  resources.belief += resources.pop * 0.02;
+  resources.science += resources.pop * 0.008;
+  if (resources.food > resources.pop * 0.25) resources.food -= resources.pop * 0.05;
   updateUI();
-}, 1000);
+}, 1100);
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
@@ -236,7 +240,7 @@ addNature();
 updateBuildMenu();
 updateUI();
 animate();
-log('Vylepšená 3D verzia! Viac zdrojov, väčšia mapa, lepšie stromy a budovy.');
+log('Optimalizovaná verzia! Lepší výkon a grafika na mobile.');
 </script>
 </body>
 </html>
