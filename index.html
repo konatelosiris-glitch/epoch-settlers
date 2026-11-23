@@ -314,6 +314,15 @@ function clearNatureAt(x, y) {
   rocks.filter(r => r.x === x && r.y === y).forEach(r => natureGroup.remove(r.mesh));
   rocks = rocks.filter(r => !(r.x === x && r.y === y));
 }
+// After sculpting tile (x,y) from height h0, move the building/trees/rocks/road on it to the new ground level.
+function syncTileHeight(x, y, h0) {
+  const dy = (terrainHeights[y][x] - h0) * 0.5;
+  if (!dy) return;
+  buildingGroup.children.forEach(g => { if (g.userData.x === x && g.userData.y === y) g.position.y += dy; });
+  trees.forEach(t => { if (t.x === x && t.y === y && t.mesh) { t.mesh.trunk.position.y += dy; t.mesh.leaves.position.y += dy; } });
+  rocks.forEach(r => { if (r.x === x && r.y === y) r.mesh.position.y += dy; });
+  if (roadTiles.has(x + ',' + y)) createRoads();
+}
 function addNature() {
   while (natureGroup.children.length) natureGroup.remove(natureGroup.children[0]);
   trees = [];
@@ -921,8 +930,8 @@ function handleCanvasTap(e) {
           updateUI();
         } else log('Nedostatok kameňa');
       }
-      else if (mode === 'sculpt-up') { terrainHeights[y][x] = Math.min(3, terrainHeights[y][x] + 0.4); createTerrain(); showFeedback(x*TILE, '↑'); log('Zvýšené'); }
-      else if (mode === 'sculpt-down') { terrainHeights[y][x] = Math.max(0, terrainHeights[y][x] - 0.4); createTerrain(); showFeedback(x*TILE, '↓'); log('Znížené'); }
+      else if (mode === 'sculpt-up') { const h0 = terrainHeights[y][x]; terrainHeights[y][x] = Math.min(3, h0 + 0.4); createTerrain(); syncTileHeight(x, y, h0); showFeedback(x*TILE, '↑'); log('Zvýšené'); }
+      else if (mode === 'sculpt-down') { const h0 = terrainHeights[y][x]; terrainHeights[y][x] = Math.max(0, h0 - 0.4); createTerrain(); syncTileHeight(x, y, h0); showFeedback(x*TILE, '↓'); log('Znížené'); }
       else if (mode === 'mine') {
         resources.stone += 3 + Math.random()*2;
         resources.coal += Math.random() > 0.6 ? 1 : 0;
