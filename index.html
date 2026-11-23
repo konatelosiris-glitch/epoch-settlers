@@ -4,20 +4,45 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0a0a1a">
 <title>Epoch Settlers 3D</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 body { font-family: system-ui, -apple-system, sans-serif; background: #0a0a1a; color: #eee; overflow: hidden; height: 100dvh; touch-action: none; }
-#ui { position: absolute; top: 0; left: 0; right: 0; pointer-events: none; z-index: 10; padding-top: env(safe-area-inset-top); }
-#top-bar { background: rgba(22,33,62,0.95); padding: 6px 8px; display: flex; flex-wrap: wrap; gap: 4px; font-size: 11px; pointer-events: auto; }
-.resource { background: #0f3460; padding: 3px 7px; border-radius: 10px; white-space: nowrap; }
+#ui { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 10; }
+#top-bar { 
+  position: absolute; top: 0; left: 0; right: 0;
+  background: rgba(22,33,62,0.92); 
+  padding: 8px 6px; 
+  padding-top: max(8px, env(safe-area-inset-top));
+  display: flex; flex-wrap: wrap; gap: 4px; 
+  font-size: 12px; 
+  pointer-events: none;
+}
+.resource { background: #0f3460; padding: 4px 8px; border-radius: 12px; white-space: nowrap; font-size: 13px; }
 .resource span { font-weight: bold; color: #ffd166; }
-#bottom-ui { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(22,33,62,0.97); padding: 6px 8px 10px; padding-bottom: max(10px, env(safe-area-inset-bottom)); max-height: 34vh; overflow-y: auto; pointer-events: auto; }
-.mode-btn, .build-btn, .ctrl { background: #0f3460; border: 1px solid #e94560; color: white; padding: 7px 9px; border-radius: 6px; font-size: 12px; margin: 2px; min-height: 36px; }
+#bottom-ui { 
+  position: absolute; bottom: 0; left: 0; right: 0; 
+  background: rgba(22,33,62,0.97); 
+  padding: 8px 6px 12px; 
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  max-height: 42vh; 
+  overflow-y: auto; 
+  pointer-events: auto;
+  border-top: 1px solid #e94560;
+}
+#modes { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.mode-btn, .build-btn { 
+  background: #0f3460; border: 1px solid #e94560; color: white; 
+  padding: 10px 12px; border-radius: 8px; font-size: 14px; 
+  margin: 2px; min-height: 44px; min-width: 70px;
+  flex: 1 1 auto;
+}
 .mode-btn.selected, .build-btn.selected { background: #e94560; }
+#build-menu { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+#log { font-size: 13px; color: #a8dadc; margin: 6px 0; min-height: 18px; text-align: center; }
 #canvas-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
-#log { font-size: 12px; color: #a8dadc; margin: 4px 0; min-height: 16px; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -120,6 +145,8 @@ controls.enableDamping = true;
 controls.maxPolarAngle = Math.PI / 2.05;
 controls.minDistance = 5;
 controls.maxDistance = 40;
+controls.enablePan = true;
+controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
 const ambient = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambient);
 const hemi = new THREE.HemisphereLight(0x87ceeb, 0x3a5f0b, 0.5);
@@ -424,7 +451,7 @@ spawnSettlers();
 updateBuildMenu();
 updateUI();
 animate();
-log('Vodné zdroje: rieka + jazerá! Môžeš stavať studne.');
+log('Ovládanie je dole! Jeden prst = otáčanie, dva prsty = zoom/posun.');
 </script>
 </body>
 </html>
