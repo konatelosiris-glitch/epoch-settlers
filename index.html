@@ -392,12 +392,18 @@ function updateAnimals() {
     }
   });
 }
-function spawnSettlers() {
-  while (settlerGroup.children.length) settlerGroup.remove(settlerGroup.children[0]);
-  settlers = [];
+// keep=true (used after placing a building): existing settlers keep their position/job; only add/remove the difference.
+function spawnSettlers(keep = false) {
   const count = Math.min(resources.pop, isMobile ? 5 : 10);
+  if (keep) {
+    settlers.slice(count).forEach(s => settlerGroup.remove(s.mesh.body, s.mesh.head));
+    settlers = settlers.slice(0, count);
+  } else {
+    while (settlerGroup.children.length) settlerGroup.remove(settlerGroup.children[0]);
+    settlers = [];
+  }
   const colors = [0xffcc80, 0xffab91, 0xbcaaa4, 0x90a4ae, 0x81c784];
-  for (let i = 0; i < count; i++) {
+  for (let i = settlers.length; i < count; i++) {
     const x = Math.floor(Math.random() * GRID);
     const y = Math.floor(Math.random() * GRID);
     const body = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.5, 5), new THREE.MeshLambertMaterial({ color: colors[i % colors.length] }));
@@ -959,7 +965,7 @@ function handleCanvasTap(e) {
           clearNatureAt(x, y);
           if (selectedBuilding === 'house') resources.pop += 2;
           tryAutoRoad(x, y);
-          spawnSettlers();
+          spawnSettlers(true);
           showFeedback(x*TILE, bt.name);
           playSound(400, 0.15);
           log('Postavené: ' + bt.name);
