@@ -987,12 +987,15 @@ setInterval(() => {
       if (canProduce) {
         for (const [k, v] of Object.entries(bt.consume)) resources[k] -= v * 0.2;
         if (bt.prod) for (const [k, v] of Object.entries(bt.prod)) {
+          if (k === 'pop') continue;
           resources[k] = (resources[k]||0) + v * 0.25 * levelMult;
           stats.produced += v * 0.25 * levelMult;
         }
       }
     } else if (bt.prod) {
       for (const [k, v] of Object.entries(bt.prod)) {
+        // Houses grant population once when placed (+2), not every tick.
+        if (k === 'pop') continue;
         resources[k] = (resources[k]||0) + v * 0.25 * levelMult;
         stats.produced += v * 0.25 * levelMult;
       }
