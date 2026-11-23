@@ -856,7 +856,24 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
 });
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
+// Act on a tap/click only (pointerup with little movement), so dragging/pinching the camera
+// with OrbitControls does not place buildings, roads, sculpt or mine as a side effect.
+const activePointers = new Map();
+let tapCandidate = null;
 renderer.domElement.addEventListener('pointerdown', (e) => {
+  activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  tapCandidate = (activePointers.size === 1 && e.button === 0) ? { id: e.pointerId, x: e.clientX, y: e.clientY } : null;
+});
+renderer.domElement.addEventListener('pointercancel', (e) => { activePointers.delete(e.pointerId); tapCandidate = null; });
+window.addEventListener('pointerup', (e) => {
+  const had = activePointers.delete(e.pointerId);
+  const t = tapCandidate;
+  if (!had || !t || t.id !== e.pointerId) return;
+  tapCandidate = null;
+  if (Math.hypot(e.clientX - t.x, e.clientY - t.y) > 8) return;
+  handleCanvasTap(e);
+});
+function handleCanvasTap(e) {
   const rect = renderer.domElement.getBoundingClientRect();
   mouse.x = (e.clientX - rect.left) / rect.width * 2 - 1;
   mouse.y = -(e.clientY - rect.top) / rect.height * 2 + 1;
@@ -930,7 +947,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
       }
     }
   }
-});
+}
 function animate() {
   requestAnimationFrame(animate);
   animTime += 0.016;
