@@ -708,6 +708,8 @@ function showFeedback(worldX, text) {
   fb.style.opacity = '1';
   setTimeout(() => fb.style.opacity = '0', 800);
 }
+// One auto-hide timer for the info panel: a new tap restarts the 4s, so an older timer can't hide the newer panel early.
+let infoPanelTimer = null;
 function showBuildingInfo(b) {
   const panel = document.getElementById('info-panel');
   const bt = buildingTypes[b.type];
@@ -726,7 +728,8 @@ function showBuildingInfo(b) {
   }
   panel.innerHTML = info;
   panel.style.display = 'block';
-  setTimeout(() => panel.style.display = 'none', 4000);
+  clearTimeout(infoPanelTimer);
+  infoPanelTimer = setTimeout(() => panel.style.display = 'none', 4000);
 }
 function createBuilding(type, x, y, level = 1) {
   const bt = buildingTypes[type];
