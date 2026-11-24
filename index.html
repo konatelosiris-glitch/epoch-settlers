@@ -617,7 +617,8 @@ function updateSettlers() {
     if (s.job === 'plant' && Math.abs(s.x - s.targetX) < 0.5 && Math.abs(s.y - s.targetY) < 0.5 && Math.random() > 0.93) {
       const px = Math.round(s.x);
       const py = Math.round(s.y);
-      if (!trees.some(t => t.x===px && t.y===py)) {
+      // Re-check: a road/building may have been placed on the spot while the settler walked there.
+      if (!trees.some(t => t.x===px && t.y===py) && !riverTiles.has(px+','+py) && !roadTiles.has(px+','+py) && !buildings.some(b => b.x===px && b.y===py)) {
         plantTree(px, py);
         showFeedback(s.x*TILE, '🌱');
       }
