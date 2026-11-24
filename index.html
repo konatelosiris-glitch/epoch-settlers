@@ -702,6 +702,7 @@ function completeQuest(q) {
   }
   showFeedback(GRID*TILE/2, '✓ ' + q.name);
 }
+let feedbackTimer = null;
 function showFeedback(worldX, text) {
   const fb = document.getElementById('feedback');
   fb.textContent = text;
@@ -709,7 +710,9 @@ function showFeedback(worldX, text) {
   fb.style.top = '40%';
   fb.style.transform = 'translate(-50%, -50%)';
   fb.style.opacity = '1';
-  setTimeout(() => fb.style.opacity = '0', 800);
+  // One hide timer: a new toast restarts the 800ms, so an older toast's timer can't hide it early.
+  clearTimeout(feedbackTimer);
+  feedbackTimer = setTimeout(() => fb.style.opacity = '0', 800);
 }
 // One auto-hide timer for the info panel: a new tap restarts the 4s, so an older timer can't hide the newer panel early.
 let infoPanelTimer = null;
@@ -958,14 +961,16 @@ document.getElementById('btn-trade').onclick = () => {
   if (tm.style.display === 'flex') updateTradeMenu();
 };
 function setMode(m) {
+  if (m === 'center') {
+    // 🎯 is a one-shot action: centre the camera but keep the current mode, so map taps keep working.
+    controls.target.set(GRID*TILE/2, 0, GRID*TILE/2);
+    camera.position.set(GRID*TILE/2, 20, GRID*TILE/2 + 12);
+    return;
+  }
   document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('selected', b.dataset.mode === m));
   mode = m;
   document.getElementById('upgrade-menu').style.display = 'none';
   document.getElementById('info-panel').style.display = 'none';
-  if (mode === 'center') {
-    controls.target.set(GRID*TILE/2, 0, GRID*TILE/2);
-    camera.position.set(GRID*TILE/2, 20, GRID*TILE/2 + 12);
-  }
 }
 document.querySelectorAll('.mode-btn').forEach(btn => {
   btn.onclick = () => setMode(btn.dataset.mode);
