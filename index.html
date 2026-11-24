@@ -39,6 +39,9 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0a0a1a; c
   flex: 1 1 auto;
 }
 .mode-btn.selected, .build-btn.selected { background: #e94560; }
+.build-btn .cost { display: block; font-size: 9px; opacity: 0.85; margin-top: 1px; white-space: nowrap; }
+.build-btn.unaffordable .cost { color: #ff8a80; opacity: 1; }
+.build-btn.locked { opacity: 0.45; border-style: dashed; }
 .save-btn { background: #1b5e20; border-color: #4caf50; font-size: 10px; padding: 5px 6px; }
 .trade-btn { background: #4a148c; border-color: #9c27b0; font-size: 10px; }
 .upgrade-btn { background: #f57c00; border-color: #ff9800; font-weight: bold; }
@@ -800,18 +803,46 @@ function updateUI() {
   document.getElementById('era').textContent = 'Éra: ' + eras[era] + ' | ' + weatherTypes[weather].icon + ' ' + weatherTypes[weather].name;
   document.getElementById('stats').textContent = 'Vyrobené: ' + Math.floor(stats.produced) + ' | Max: ' + Math.floor(stats.maxPop) + ' | ' + Math.floor(stats.time/60) + 'm';
   updateQuests();
+  refreshBuildButtons();
 }
 function log(msg) { document.getElementById('log').textContent = msg; }
+function costText(cost) {
+  return (cost.wood ? cost.wood + '🪵' : '') + (cost.wood && cost.stone ? ' ' : '') + (cost.stone ? cost.stone + '🪨' : '');
+}
+// Human-readable list of what is missing to pay `cost`, or '' if affordable.
+function missingText(cost) {
+  const miss = [];
+  if (resources.wood < (cost.wood||0)) miss.push(Math.ceil((cost.wood||0) - resources.wood) + ' dreva');
+  if (resources.stone < (cost.stone||0)) miss.push(Math.ceil((cost.stone||0) - resources.stone) + ' kameňa');
+  return miss.length ? 'Chýba: ' + miss.join(', ') : '';
+}
 function updateBuildMenu() {
   const menu = document.getElementById('build-menu');
   menu.innerHTML = '';
   Object.entries(buildingTypes).forEach(([k, v]) => {
-    if (v.era > era) return;
+    if (v.era > era + 1) return;
+    const locked = v.era > era;
     const btn = document.createElement('button');
-    btn.className = 'build-btn' + (selectedBuilding === k ? ' selected' : '');
-    btn.textContent = v.name;
-    btn.onclick = () => { selectedBuilding = k; updateBuildMenu(); };
+    btn.className = 'build-btn' + (selectedBuilding === k && !locked ? ' selected' : '') + (locked ? ' locked' : '');
+    btn.dataset.type = k;
+    btn.innerHTML = v.name + '<span class="cost">' + (locked ? '🔒 ' + eras[v.era] : costText(v.cost)) + '</span>';
+    btn.onclick = () => {
+      if (locked) { log(v.name + ': vyžaduje éru ' + eras[v.era]); return; }
+      selectedBuilding = k;
+      setMode('build'); // picking a building always switches to build mode (was stuck in upgrade/info mode)
+      updateBuildMenu();
+      const miss = missingText(v.cost);
+      log(v.name + ' (' + costText(v.cost) + ')' + (miss ? ' – ' + miss : ' – klikni na mapu'));
+    };
     menu.appendChild(btn);
+  });
+  refreshBuildButtons();
+}
+// Mark build buttons the player cannot afford right now (called every UI tick).
+function refreshBuildButtons() {
+  document.querySelectorAll('#build-menu .build-btn').forEach(btn => {
+    const v = buildingTypes[btn.dataset.type];
+    if (v) btn.classList.toggle('unaffordable', !!missingText(v.cost));
   });
 }
 function showUpgradeMenu(building) {
@@ -926,18 +957,18 @@ document.getElementById('btn-trade').onclick = () => {
   tm.style.display = tm.style.display === 'none' ? 'flex' : 'none';
   if (tm.style.display === 'flex') updateTradeMenu();
 };
+function setMode(m) {
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('selected', b.dataset.mode === m));
+  mode = m;
+  document.getElementById('upgrade-menu').style.display = 'none';
+  document.getElementById('info-panel').style.display = 'none';
+  if (mode === 'center') {
+    controls.target.set(GRID*TILE/2, 0, GRID*TILE/2);
+    camera.position.set(GRID*TILE/2, 20, GRID*TILE/2 + 12);
+  }
+}
 document.querySelectorAll('.mode-btn').forEach(btn => {
-  btn.onclick = () => {
-    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-    mode = btn.dataset.mode;
-    document.getElementById('upgrade-menu').style.display = 'none';
-    document.getElementById('info-panel').style.display = 'none';
-    if (mode === 'center') {
-      controls.target.set(GRID*TILE/2, 0, GRID*TILE/2);
-      camera.position.set(GRID*TILE/2, 20, GRID*TILE/2 + 12);
-    }
-  };
+  btn.onclick = () => setMode(btn.dataset.mode);
 });
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
@@ -972,7 +1003,7 @@ function handleCanvasTap(e) {
       if (mode === 'info') {
         const b = buildings.find(b => b.x === x && b.y === y);
         if (b) showBuildingInfo(b);
-        else log('Klikni na budovu');
+        else log('Režim info: klikni na budovu (na stavanie zvoľ budovu dole)');
         return;
       }
       if (mode === 'upgrade') {
@@ -981,7 +1012,7 @@ function handleCanvasTap(e) {
           showUpgradeMenu(th);
           log('Klikni na tlačidlo upgrade');
         } else {
-          log('Klikni na radnicu');
+          log('Režim vylepšenia: klikni na radnicu (na stavanie zvoľ budovu dole)');
         }
         return;
       }
@@ -1011,12 +1042,14 @@ function handleCanvasTap(e) {
         log('Vyťažené');
         updateUI();
       }
-      else if (mode === 'build' && selectedBuilding && !buildings.some(b => b.x===x && b.y===y) && !roadTiles.has(x+','+y)) {
+      else if (mode === 'build' && selectedBuilding && buildings.some(b => b.x===x && b.y===y)) { log('Tu už stojí budova – vyber voľné miesto'); }
+      else if (mode === 'build' && selectedBuilding && roadTiles.has(x+','+y)) { log('Na ceste sa nedá stavať – vyber voľné miesto'); }
+      else if (mode === 'build' && selectedBuilding) {
         if (selectedBuilding === 'bridge' && !riverTiles.has(x+','+y)) { log('Most len cez rieku'); return; }
         if (selectedBuilding !== 'bridge' && riverTiles.has(x+','+y)) { log('Nemôžeš stavať na vode'); return; }
         if (selectedBuilding === 'townhall' && buildings.some(b => b.type === 'townhall')) { log('Môžeš mať len jednu radnicu'); return; }
         const bt = buildingTypes[selectedBuilding];
-        if (bt.era > era) { log('Potrebuješ vyššiu éru'); return; }
+        if (bt.era > era) { log(bt.name + ': vyžaduje éru ' + eras[bt.era]); return; }
         const cost = bt.cost;
         if (resources.wood >= (cost.wood||0) && resources.stone >= (cost.stone||0)) {
           resources.wood -= cost.wood||0; resources.stone -= cost.stone||0;
@@ -1030,7 +1063,7 @@ function handleCanvasTap(e) {
           playSound(400, 0.15);
           log('Postavené: ' + bt.name);
           updateUI();
-        } else log('Nedostatok zdrojov');
+        } else log(bt.name + ' – ' + missingText(cost));
       }
     }
   }
