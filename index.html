@@ -294,13 +294,16 @@ function generateTerrain() {
 }
 function createTerrain() {
   while (terrainGroup.children.length) terrainGroup.remove(terrainGroup.children[0]);
-  const geo = new THREE.PlaneGeometry(GRID * TILE, GRID * TILE, GRID - 1, GRID - 1);
+  // GRID x GRID vertices spaced exactly TILE apart, vertex (x,z) at world (x*TILE, z*TILE) = tile (x,z).
+  // (Was GRID*TILE wide: spacing GRID*TILE/(GRID-1) skipped the centre row/column and sampled tile GRID at the edge.)
+  const SPAN = (GRID - 1) * TILE;
+  const geo = new THREE.PlaneGeometry(SPAN, SPAN, GRID - 1, GRID - 1);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
   const colors = [];
   for (let i = 0; i < pos.count; i++) {
-    const x = Math.round((pos.getX(i) + GRID * TILE / 2) / TILE);
-    const z = Math.round((pos.getZ(i) + GRID * TILE / 2) / TILE);
+    const x = Math.round((pos.getX(i) + SPAN / 2) / TILE);
+    const z = Math.round((pos.getZ(i) + SPAN / 2) / TILE);
     const h = (terrainHeights[z] && terrainHeights[z][x]) || 0;
     const isRiver = riverTiles.has(x + ',' + z);
     pos.setY(i, isRiver ? 0.05 : h * 0.5);
@@ -313,7 +316,7 @@ function createTerrain() {
   geo.computeVertexNormals();
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
   terrainMesh = new THREE.Mesh(geo, mat);
-  terrainMesh.position.set(GRID * TILE / 2, 0, GRID * TILE / 2);
+  terrainMesh.position.set(SPAN / 2, 0, SPAN / 2);
   terrainGroup.add(terrainMesh);
 }
 function createRoads() {
