@@ -139,8 +139,9 @@ function eraReqMet(e) { return Object.entries(ERA_REQS[e] || {}).every(([k, v]) 
 function nextEraText() {
   if (era >= eras.length - 1) return '🏆 Dosiahnutá posledná éra';
   return 'Ďalšia éra (' + eras[era + 1] + '): ' + Object.entries(ERA_REQS[era]).map(([k, v]) => {
-    const have = resources[k] || 0;
-    return REQ_ICONS[k] + ' ' + Math.floor(have) + '/' + (v + 1) + (have > v ? ' ✅' : ' ❌');
+    const have = resources[k] || 0, met = have > v;
+    // Rule is have > v; shown target is v+1, so round up when met (300.4 -> 301/301 ✅, not 300/301 ✅).
+    return REQ_ICONS[k] + ' ' + (met ? Math.ceil(have) : Math.floor(have)) + '/' + (v + 1) + (met ? ' ✅' : ' ❌');
   }).join('  ');
 }
 let resources = { food: 200, bread: 0, wood: 150, planks: 0, stone: 100, tools: 0, water: 50, coal: 0, iron: 0, pop: 12, happiness: 70, belief: 70, science: 0, gold: 0 };
