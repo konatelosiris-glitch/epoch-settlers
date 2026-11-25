@@ -42,12 +42,14 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0a0a1a; c
 .build-btn .cost { display: block; font-size: 9px; opacity: 0.85; margin-top: 1px; white-space: nowrap; }
 .build-btn.unaffordable .cost { color: #ff8a80; opacity: 1; }
 .build-btn.locked { opacity: 0.45; border-style: dashed; }
+@media (max-width: 480px) { .build-btn { padding: 3px 4px; } }
 .save-btn { background: #1b5e20; border-color: #4caf50; font-size: 10px; padding: 5px 6px; }
 .trade-btn { background: #4a148c; border-color: #9c27b0; font-size: 10px; }
 .upgrade-btn { background: #f57c00; border-color: #ff9800; font-weight: bold; }
 #build-menu, #trade-menu, #upgrade-menu { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 4px; }
 #log { font-size: 11px; color: #a8dadc; margin: 2px 0; min-height: 14px; text-align: center; }
 #era { font-size: 12px; color: #ffd166; text-align: center; margin: 2px 0; font-weight: bold; }
+#next-era { font-size: 10px; color: #cfd8dc; text-align: center; margin: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #stats { font-size: 10px; color: #90a4ae; text-align: center; margin: 1px 0; }
 #info-panel { 
   position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
@@ -98,6 +100,7 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0a0a1a; c
   <div id="info-panel"></div>
   <div id="bottom-ui">
     <div id="era">Éra: Pravek</div>
+    <div id="next-era"></div>
     <div id="stats">Vyrobené: 0 | Max pop: 12 | Čas: 0m</div>
     <div id="modes">
       <button class="mode-btn selected" data-mode="build">🏗️</button>
@@ -129,6 +132,17 @@ const GRID = isMobile ? 28 : 45, TILE = 2;
 let mode = 'build', selectedBuilding = 'townhall';
 let era = 0;
 const eras = ['Pravek', 'Doba kamenná', 'Doba bronzová'];
+// ERA_REQS[i]: values that must be EXCEEDED (>) to advance from era i to era i+1.
+const ERA_REQS = [{ belief: 150, science: 20 }, { belief: 300, science: 60, iron: 20 }];
+const REQ_ICONS = { belief: '🙏', science: '🔬', iron: '⚙️' };
+function eraReqMet(e) { return Object.entries(ERA_REQS[e] || {}).every(([k, v]) => (resources[k] || 0) > v); }
+function nextEraText() {
+  if (era >= eras.length - 1) return '🏆 Dosiahnutá posledná éra';
+  return 'Ďalšia éra (' + eras[era + 1] + '): ' + Object.entries(ERA_REQS[era]).map(([k, v]) => {
+    const have = resources[k] || 0;
+    return REQ_ICONS[k] + ' ' + Math.floor(have) + '/' + (v + 1) + (have > v ? ' ✅' : ' ❌');
+  }).join('  ');
+}
 let resources = { food: 200, bread: 0, wood: 150, planks: 0, stone: 100, tools: 0, water: 50, coal: 0, iron: 0, pop: 12, happiness: 70, belief: 70, science: 0, gold: 0 };
 let stats = { produced: 0, maxPop: 12, time: 0 };
 let terrainHeights = Array.from({length: GRID}, () => Array(GRID).fill(0));
@@ -190,6 +204,7 @@ const textures = {
   grass: makeTexture('#4caf50', 'grass'),
   farm: makeTexture('#66bb6a', 'grass'),
   mine: makeTexture('#546e7a', 'stone'),
+  ironmine: makeTexture('#8d4e2a', 'stone'),
   townhall: makeTexture('#6d4c41', 'stone')
 };
 const buildingTypes = {
@@ -203,6 +218,7 @@ const buildingTypes = {
   forester: { name: "Lesník", cost: { wood: 8, stone: 4 }, prod: {}, height: 1.4, tex: textures.wood, era: 0 },
   bakery: { name: "Pekáreň", cost: { wood: 12, stone: 6 }, prod: { bread: 1.5 }, consume: { food: 1 }, height: 1.6, tex: textures.wood, era: 1 },
   lumber: { name: "Drevár", cost: { wood: 10, stone: 4 }, prod: { planks: 1 }, consume: { wood: 1.5 }, height: 1.5, tex: textures.wood, era: 1 },
+  ironmine: { name: "Železná baňa", cost: { wood: 15, stone: 20 }, prod: { iron: 1, coal: 0.2 }, height: 1.5, tex: textures.ironmine, era: 1 },
   smith: { name: "Kováč", cost: { wood: 8, stone: 12 }, prod: { tools: 0.8 }, consume: { iron: 0.5, coal: 0.3 }, height: 1.7, tex: textures.stone, era: 2 },
   church: { name: "Kostol", cost: { wood: 15, stone: 12 }, prod: { belief: 1.5, science: 0.3 }, height: 2.5, tex: textures.stone, era: 1 },
   storage: { name: "Sklad", cost: { wood: 8, stone: 8 }, prod: {}, height: 1.3, tex: textures.wood, era: 0 },
@@ -514,7 +530,7 @@ function findWork(s) {
       return;
     }
   }
-  const works = buildings.filter(b => ['farm','mine','bakery','lumber','smith'].includes(b.type));
+  const works = buildings.filter(b => ['farm','mine','ironmine','bakery','lumber','smith'].includes(b.type));
   if (works.length && Math.random() > 0.35) {
     const w = works[Math.floor(Math.random() * works.length)];
     s.path = findPath(s.x, s.y, w.x, w.y);
@@ -664,7 +680,7 @@ function updateMinimap() {
     }
   }
   buildings.forEach(b => {
-    ctx.fillStyle = b.type === 'townhall' ? '#e94560' : '#ffd166';
+    ctx.fillStyle = b.type === 'townhall' ? '#e94560' : b.type === 'ironmine' ? '#ff7043' : '#ffd166';
     ctx.fillRect(b.x*scale, b.y*scale, scale*1.5, scale*1.5);
   });
   settlers.forEach(s => {
@@ -770,7 +786,7 @@ function createBuilding(type, x, y, level = 1) {
     roof.rotation.y = Math.PI / 4;
     group.add(roof);
   }
-  if (['mine','bakery','smith','lumber'].includes(type)) {
+  if (['mine','ironmine','bakery','smith','lumber'].includes(type)) {
     const smoke = new THREE.Mesh(new THREE.SphereGeometry(0.1, 4, 3), new THREE.MeshLambertMaterial({ color: 0xaaaaaa, transparent: true, opacity: 0.6 }));
     smoke.position.y = height + 0.4;
     smoke.userData = { type: 'smoke', offset: Math.random() * Math.PI * 2 };
@@ -804,6 +820,7 @@ function updateUI() {
     if (el) el.textContent = Math.floor(resources[k] || 0);
   });
   document.getElementById('era').textContent = 'Éra: ' + eras[era] + ' | ' + weatherTypes[weather].icon + ' ' + weatherTypes[weather].name;
+  document.getElementById('next-era').textContent = nextEraText();
   document.getElementById('stats').textContent = 'Vyrobené: ' + Math.floor(stats.produced) + ' | Max: ' + Math.floor(stats.maxPop) + ' | ' + Math.floor(stats.time/60) + 'm';
   updateQuests();
   refreshBuildButtons();
@@ -1163,8 +1180,7 @@ setInterval(() => {
     if (settlers.length > Math.min(resources.pop, isMobile ? 5 : 10)) spawnSettlers(true);
   }
   if (resources.pop > stats.maxPop) stats.maxPop = resources.pop;
-  if (era < 1 && resources.belief > 150 && resources.science > 20) { era = 1; updateBuildMenu(); log('Nová éra: Doba kamenná!'); playSound(700, 0.3); }
-  if (era < 2 && resources.belief > 300 && resources.science > 60 && resources.iron > 20) { era = 2; updateBuildMenu(); log('Nová éra: Doba bronzová!'); playSound(800, 0.4); }
+  if (era < eras.length - 1 && eraReqMet(era)) { era++; updateBuildMenu(); log('Nová éra: ' + eras[era] + '!'); playSound(600 + era * 100, 0.3 + era * 0.05); }
   resources.happiness = Math.max(10, Math.min(100, resources.happiness));
   dayTime = (dayTime + 1) % 120;
   const wt2 = weatherTypes[weather];
