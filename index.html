@@ -950,6 +950,7 @@ function loadGame(slot) {
     roadTiles = new Set(data.roadTiles || []);
     riverTiles = new Set(data.riverTiles || []);
     terrainHeights = data.terrainHeights || terrainHeights;
+    riverTiles.forEach(k => { const [rx, ry] = k.split(',').map(Number); if (terrainHeights[ry]) terrainHeights[ry][rx] = 0; }); // heal saves with sculpted river tiles
     seed = data.seed || seed;
     era = data.era || 0;
     stats = data.stats || stats;
@@ -1055,6 +1056,7 @@ function handleCanvasTap(e) {
           updateUI();
         } else log('Nedostatok kameňa');
       }
+      else if ((mode === 'sculpt-up' || mode === 'sculpt-down') && riverTiles.has(x+','+y)) { log('Rieku sa nedá upravovať'); } // river is always drawn at water level; raising it made bridges/settlers float
       else if (mode === 'sculpt-up') { const h0 = terrainHeights[y][x]; terrainHeights[y][x] = Math.min(3, h0 + 0.4); createTerrain(); syncTileHeight(x, y, h0); showFeedback(x*TILE, '↑'); log('Zvýšené'); }
       else if (mode === 'sculpt-down') { const h0 = terrainHeights[y][x]; terrainHeights[y][x] = Math.max(0, h0 - 0.4); createTerrain(); syncTileHeight(x, y, h0); showFeedback(x*TILE, '↓'); log('Znížené'); }
       else if (mode === 'mine') {
