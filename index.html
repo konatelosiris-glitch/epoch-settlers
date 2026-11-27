@@ -738,6 +738,8 @@ function showFeedback(worldX, text) {
 }
 // One auto-hide timer for the info panel: a new tap restarts the 4s, so an older timer can't hide the newer panel early.
 let infoPanelTimer = null;
+// Economy tick (1x per second): production = prod * PROD_RATE * level, consumption = consume * CONSUME_RATE.
+const PROD_RATE = 0.25, CONSUME_RATE = 0.2;
 function showBuildingInfo(b) {
   const panel = document.getElementById('info-panel');
   const bt = buildingTypes[b.type];
@@ -745,13 +747,14 @@ function showBuildingInfo(b) {
   if (bt.prod) {
     info += 'Produkuje: ';
     for (const [k, v] of Object.entries(bt.prod)) {
-      info += k + ' +' + (v * (b.level||1)).toFixed(1) + ' ';
+      // Show the real per-second rate used by the economy tick (pop is a one-time bonus on placement).
+      info += k === 'pop' ? k + ' +' + v + ' ' : k + ' +' + +(v * PROD_RATE * (b.level||1)).toFixed(3) + '/s ';
     }
   }
   if (bt.consume) {
     info += '<br>Spotreba: ';
     for (const [k, v] of Object.entries(bt.consume)) {
-      info += k + ' -' + v + ' ';
+      info += k + ' -' + +(v * CONSUME_RATE).toFixed(3) + '/s ';
     }
   }
   panel.innerHTML = info;
@@ -1132,22 +1135,22 @@ setInterval(() => {
     if (bt.consume) {
       let canProduce = true;
       for (const [k, v] of Object.entries(bt.consume)) {
-        if ((resources[k] || 0) < v * 0.2) canProduce = false;
+        if ((resources[k] || 0) < v * CONSUME_RATE) canProduce = false;
       }
       if (canProduce) {
-        for (const [k, v] of Object.entries(bt.consume)) resources[k] -= v * 0.2;
+        for (const [k, v] of Object.entries(bt.consume)) resources[k] -= v * CONSUME_RATE;
         if (bt.prod) for (const [k, v] of Object.entries(bt.prod)) {
           if (k === 'pop') continue;
-          resources[k] = (resources[k]||0) + v * 0.25 * levelMult;
-          stats.produced += v * 0.25 * levelMult;
+          resources[k] = (resources[k]||0) + v * PROD_RATE * levelMult;
+          stats.produced += v * PROD_RATE * levelMult;
         }
       }
     } else if (bt.prod) {
       for (const [k, v] of Object.entries(bt.prod)) {
         // Houses grant population once when placed (+2), not every tick.
         if (k === 'pop') continue;
-        resources[k] = (resources[k]||0) + v * 0.25 * levelMult;
-        stats.produced += v * 0.25 * levelMult;
+        resources[k] = (resources[k]||0) + v * PROD_RATE * levelMult;
+        stats.produced += v * PROD_RATE * levelMult;
       }
     }
   });
